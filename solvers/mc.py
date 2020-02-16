@@ -2,10 +2,11 @@ import numpy as np
 
 
 class MCOnPolicy:
-    def __init__(self, Q, env, e=0.1):
+    def __init__(self, Q, env, discount_rate=1, e=0.1):
         self.Q = Q
         self.env = env
         self.e = e
+        self.discount_rate = discount_rate
         self.N = np.zeros(Q.shape, dtype="int")
         self.n_actions = Q.shape[1]
         self.action_space = np.arange(self.n_actions)
@@ -27,11 +28,18 @@ class MCOnPolicy:
 
     def act(self, s, r=None):
         self.states.append(s)
-        if r:
+        if r != None:
             self.rewards.append(r)
         a = self.choose(s)
         self.actions.append(a)
         return a
+
+    def get_index(self, s, a):
+        try:
+            index = (*s, a)
+        except TypeError:
+            index = (s, a)
+        return index
 
     def update(self, r):
         self.rewards.append(r)
@@ -42,14 +50,17 @@ class MCOnPolicy:
             r = self.rewards.pop()
             G = (G * self.discount_rate) + r
             if s not in self.states:
-                index = (*s, a)
+                index = self.get_index(s, a)
                 self.N[index] += 1
                 self.Q[index] += (G - self.Q[index]) / self.N[index]
                 A = np.argmax(self.Q[index[:-1]])
-                for action in self.env.get_actions(s):
-                    index = (*s, action)
-                    if action == A:
-                        self.policy[index] = 1 - e + (e / 9)
+                possible_actions = self.env.get_actions(s)
+                for a in possible_actions:
+                    index = self.get_index(s, a)
+                    if a == A:
+                        self.policy[index] = (
+                            1 - self.e + (self.e / len(possible_actions))
+                        )
                     else:
-                        self.policy[index] = e / 9
+                        self.policy[index] = self.e / (len(possible_actions))
 
