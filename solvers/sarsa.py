@@ -2,13 +2,12 @@ import numpy as np
 
 
 class Sarsa:
-    def __init__(self, Q, env, discount_rate=1, e=0.1, alpha=0.01):
+    def __init__(self, Q, env, discount_rate=1, e=0.1, alpha=0.1):
         self.Q = Q
         self.env = env
         self.e = e
         self.discount_rate = discount_rate
         self.alpha = alpha
-        self.policy = np.zeros(Q.shape)
 
     def reset(self, s, a=None):
         self.current_state = s
@@ -20,12 +19,13 @@ class Sarsa:
 
     def choose(self, s):
         actions = self.env.get_actions(s)
-        ps = np.take(self.policy, actions)
-        if np.sum(ps) == 0:
-            a = np.random.choice(actions)
+        values = np.take(self.Q[s], actions)
+        best_a = actions[np.argmax(values)]
+        c = np.random.choice([0, 1], p=[self.e, 1 - self.e])
+        if c:
+            return best_a
         else:
-            a = np.random.choice(actions, p=ps)
-        return a
+            return np.random.choice(actions)
 
     def act(self, s, r):
         current_index = self.get_index(self.current_state, self.current_action)
