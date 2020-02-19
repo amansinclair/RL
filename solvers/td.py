@@ -47,5 +47,5 @@ class TDV:
 
     def finish(self):
         for s in self.states:
-            self.r.popleft()
+            self.rewards.popleft()
             self.update_v(s)

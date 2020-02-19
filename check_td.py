@@ -15,10 +15,10 @@ for i in range(n_iter):
     dp.update()
 
 policy = dp.get_policy()
-print(dp.V)
+# print(dp.V)
 td = TDV(V2, env, policy)
 
-n_episodes = 500
+n_episodes = 300
 for ep in range(n_episodes):
     s = env.reset()
     td.reset()
@@ -28,6 +28,6 @@ for ep in range(n_episodes):
         a = td.update(s, r, terminal)
         s, r, game_on = env.step(a)
         terminal = not (game_on)
-    td.update(s, r)
+    td.update(s, r, terminal)
 
 print(td.V)
