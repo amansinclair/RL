@@ -26,6 +26,7 @@ class TDV:
         return total
 
     def update(self, s, r=None, terminal=False):
+        a = None
         if r != None:
             self.rewards.append(r)
         if terminal:

@@ -3,15 +3,17 @@ from itertools import product
 
 
 class RandomWalk:
-    def __init__(self):
+    def __init__(self, size=5):
+        self.size = size
+        self.right_terminal = self.size + 1
         self.state = None
         self.reset()
 
     def reset(self):
-        self.state = 3
+        self.state = int(np.ceil(self.size / 2))
 
     def get_states(self):
-        return [s for s in range(1, 6)]
+        return [s for s in range(1, self.size + 1)]
 
     def get_actions(self, s):
         return []
@@ -20,7 +22,7 @@ class RandomWalk:
         """returns transition values (S, R, P) at s."""
         transitions = []
         right = s + 1
-        if right == 6:
+        if right == self.right_terminal:
             r_right = 1
         else:
             r_right = 0
@@ -36,7 +38,7 @@ class RandomWalk:
         if self.state == 0:
             r = 0
             game_on = False
-        elif self.state == 6:
+        elif self.state == self.right_terminal:
             r = 1
             game_on = False
         else:

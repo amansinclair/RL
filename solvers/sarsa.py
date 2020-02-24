@@ -1,4 +1,5 @@
 import numpy as np
+from collections import deque
 
 
 class Sarsa:
@@ -49,3 +50,50 @@ class Sarsa:
         except TypeError:
             index = (s, a)
         return index
+
+
+class NStepSarsa(Sarsa):
+    def __init__(self, *args, n=3, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n = n
+
+    def reset(self):
+        self.states = deque(maxlen=self.n)
+        self.actions = deque(maxlen=self.n)
+        self.rewards = deque(maxlen=self.n)
+        self.t = 0
+
+    def sum_rewards(self):
+        d = self.discount_rate
+        total = 0
+        for r in self.rewards:
+            total += d * r
+            d = d * self.discount_rate
+        return total
+
+    def act(self, s, r=None, terminal=False):
+        a = self.choose(s)
+        if r != None:
+            self.rewards.append(r)
+        if terminal:
+            self.finish()
+        elif self.t >= self.n:
+            index = self.get_index(self.states[0], self.actions[0])
+            self.update_q(index, s, a)
+        self.states.append(s)
+        self.actions.append(a)
+        self.t += 1
+        return a
+
+    def update_q(self, index, s=None, a=None):
+        q_old = self.Q[index]
+        G = self.sum_rewards()
+        if s:
+            G += (self.discount_rate ** self.n) * self.Q[self.get_index(s, a)]
+        self.Q[index] = q_old + (self.alpha * (G - q_old))
+
+    def finish(self):
+        for s, a in zip(self.states, self.actions):
+            index = self.get_index(s, a)
+            self.rewards.popleft()
+            self.update_q(index)
