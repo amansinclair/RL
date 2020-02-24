@@ -1,18 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from envs.walk import CliffWalk
-from solvers.sarsa import Sarsa
-
-
-def get_path(solver, env):
-    path = []
-    game_on = True
-    s = env.reset()
-    while game_on:
-        path.append(s)
-        s, r, game_on = env.step(np.argmax(solver.Q[s]))
-    return path
+from RL.envs import CliffWalk, get_path
+from RL.solvers import Sarsa
 
 
 Q = np.zeros((12, 4, 4))
@@ -23,13 +13,13 @@ sarsa = Sarsa(Q, env, alpha=0.5)
 n_episodes = 500
 steps = np.zeros(n_episodes)
 for ep in range(n_episodes):
-    s = env.reset()
+    s, r, is_terminal = env.reset()
     a = sarsa.reset(s)
-    s, r, game_on = env.step(a)
+    s, r, is_terminal = env.step(a)
     r_total = 0
-    while game_on:
+    while not (is_terminal):
         a = sarsa.act(s, r)
-        s, r, game_on = env.step(a)
+        s, r, is_terminal = env.step(a)
         r_total += r
     sarsa.act(s, r)
     r_total += r

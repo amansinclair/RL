@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from envs.gridworld import WindyEnv
-from solvers.dp import DP
+from RL.envs import WindyEnv
+from RL.solvers import DP
 
 V = np.zeros((10, 7))
 env = WindyEnv()

@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-from solvers.dp import DP
-from envs.gambler import GamblerEnv
+from RL.solvers import DP
+from RL.envs import GamblerEnv
 
 V = np.zeros(101)
 env = GamblerEnv()

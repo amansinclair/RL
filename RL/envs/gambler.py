@@ -44,6 +44,6 @@ class GamblerEnv:
         else:
             self.state -= a
             if self.state == 0:
-                is_terminal = False
+                is_terminal = True
         return EnvReturn(self.state, r, is_terminal)
 
