@@ -1,6 +1,7 @@
 import numpy as np
 
 from itertools import product
+from .env import EnvReturn, Transition
 
 
 class WindyEnv:
@@ -26,12 +27,13 @@ class WindyEnv:
         for a in self.get_actions(s):
             self.state = s
             s_, r_, _ = self.step(a)
-            transitions.append((a, [s_], [r_], [1]))
+            t = Transition(a, [s_], [r_], [1])
+            transitions.append(t)
         return transitions
 
     def reset(self):
         self.state = (0, 3)
-        return self.state
+        return EnvReturn(self.state, None, False)
 
     def step(self, a):
         wind = self.winds[self.state[0]]
@@ -50,7 +52,7 @@ class WindyEnv:
         y = self.check_y(self.state[1] + dy)
         x = self.check_x(self.state[0] + dx)
         self.state = (x, y)
-        return self.state, -1, (self.state != self.goal)
+        return EnvReturn(self.state, -1, (self.state == self.goal))
 
     def check_x(self, x):
         return max(min(9, x), 0)

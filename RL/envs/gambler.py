@@ -1,20 +1,23 @@
 import numpy as np
 
+from .env import EnvReturn, Transition
+
 
 class GamblerEnv:
-    def __init__(self, ph=0.4):
+    def __init__(self, ph=0.4, win_goal=100):
         self.ph = 0.4
         self.pt = 1 - ph
+        self.win_goal = win_goal
 
     def reset(self):
-        self.state = np.random.randint(1, 100)
-        return self.state
+        self.state = np.random.randint(1, self.win_goal)
+        return EnvReturn(self.state, None, False)
 
     def get_states(self):
-        return set(i for i in range(1, 100))
+        return set(i for i in range(1, self.win_goal))
 
     def get_actions(self, s):
-        return [i for i in range(1, min(s, 100 - s) + 1)]
+        return [i for i in range(1, min(s, self.win_goal - s) + 1)]
 
     def get_transitions(self, s):
         """returns transition values (S, R, P) at s for all actions, a."""
@@ -25,21 +28,22 @@ class GamblerEnv:
             r = 0
             if win == 100:
                 r = 1
-            transitions.append((i, [win, loss], [r, 0], [self.ph, self.pt]))
+            t = Transition(i, [win, loss], [r, 0], [self.ph, self.pt])
+            transitions.append(t)
         return transitions
 
     def step(self, a):
         result = np.random.choice([0, 1], p=[self.pt, self.ph])
         r = 0
-        game_on = True
+        is_terminal = False
         if result:
             self.state += a
-            if self.state == 100:
+            if self.state == self.win_goal:
                 r = 1
-                game_on = False
+                is_terminal = True
         else:
             self.state -= a
             if self.state == 0:
-                game_on = False
-        return self.state, r, game_on
+                is_terminal = False
+        return EnvReturn(self.state, r, is_terminal)
 

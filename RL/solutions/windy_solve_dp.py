@@ -15,13 +15,12 @@ for i in range(n_iter):
 
 
 policy = dp.get_policy()
-s = env.reset()
+s, r, is_terminal = env.reset()
 path = []
 path.append(s)
-game_on = True
-while game_on:
+while not (is_terminal):
     a = policy[s]
-    s, r, game_on = env.step(a)
+    s, r, is_terminal = env.step(a)
     path.append(s)
 
 grid = np.zeros((10, 7))

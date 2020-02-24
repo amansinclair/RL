@@ -1,5 +1,6 @@
 import numpy as np
 from itertools import product
+from .env import EnvReturn, Transition
 
 
 class RandomWalk:
@@ -11,6 +12,7 @@ class RandomWalk:
 
     def reset(self):
         self.state = int(np.ceil(self.size / 2))
+        return EnvReturn(self.state, None, False)
 
     def get_states(self):
         return [s for s in range(1, self.size + 1)]
@@ -26,8 +28,8 @@ class RandomWalk:
             r_right = 1
         else:
             r_right = 0
-        return [(s - 1, 0.5, 0), (right, 0.5, r_right)]
-        transitions.append((None, [s - 1, s + 1], [0, r_right], [0.5, 0.5]))
+        t = Transition(None, [s - 1, s + 1], [0, r_right], [0.5, 0.5])
+        transitions.append(t)
         return transitions
 
     def choice(self):
@@ -37,14 +39,14 @@ class RandomWalk:
         self.state += self.choice()
         if self.state == 0:
             r = 0
-            game_on = False
+            is_terminal = True
         elif self.state == self.right_terminal:
             r = 1
-            game_on = False
+            is_terminal = True
         else:
             r = 0
-            game_on = True
-        return self.state, r, game_on
+            is_terminal = False
+        return EnvReturn(self.state, r, is_terminal)
 
     def get_probs(self, s):
         right = s + 1
@@ -63,7 +65,7 @@ class CliffWalk:  # 4 x 12
 
     def reset(self):
         self.state = self.start
-        return self.state
+        return EnvReturn(self.state, None, False)
 
     def get_states(self):
         xs = [x for x in range(12)]
@@ -81,7 +83,8 @@ class CliffWalk:  # 4 x 12
         for a in self.get_actions(s):
             self.state = s
             s_, r_, _ = self.step(a)
-            transitions.append((a, [s_], [r_], [1]))
+            t = Transition(a, [s_], [r_], [1])
+            transitions.append(t)
         return transitions
 
     def step(self, a):
@@ -103,7 +106,7 @@ class CliffWalk:  # 4 x 12
         else:
             self.state = (x, y)
             r = -1
-        return self.state, r, (self.state != self.goal)
+        return EnvReturn(self.state, r, (self.state == self.goal))
 
     def check_x(self, x):
         return max(min(11, x), 0)
