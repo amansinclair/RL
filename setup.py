@@ -9,7 +9,7 @@ setup(
     author="alex sinclair",
     license="MIT",
     packages=["RL"],
-    install_requires=["numpy", "matplolib"],
+    install_requires=["numpy", "matplotlib"],
     zip_safe=False,
 )
 
