@@ -6,7 +6,7 @@ import gym
 
 
 class QLearn:
-    def __init__(self, net, e=0.1, discount_rate=0.8, alpha=0.01):
+    def __init__(self, net, e=0.2, discount_rate=0.8, alpha=0.1):
         self.net = net
         self.actions = [0.0, 1.0]
         self.e = e
@@ -25,22 +25,19 @@ class QLearn:
             v_next, a_best = self.max_next(s)
         if r != None:
             r = float(r)
-            a_best = self.update(s, r, v_next)
+            self.update(s, r, v_next)
         a = self.choose(a_best)
         self.previous_state = self.get_index(s, a)
         return a
 
     def update(self, s, r, v_next):
         v_prev = self.net.predict(self.previous_state)
-        v_new = v_prev + self.alpha * (r + (self.discount_rate * v_next) - v_prev)
+        v_new = v_prev + (self.alpha * (r + (self.discount_rate * v_next) - v_prev))
         self.net.fit(self.previous_state, v_new)
 
     def choose(self, a_best):
-        c = np.random.choice([0, 1], p=[self.e, 1 - self.e])
-        if c:
-            return a_best
-        else:
-            return np.random.choice(self.actions)
+        a_random = np.random.choice(self.actions)
+        return np.random.choice([a_random, a_best], p=[self.e, 1 - self.e])
 
     def max_next(self, s):
         values = np.zeros(len(self.actions))
@@ -59,7 +56,7 @@ class Net(nn.Module):
         self.first_layer = nn.Linear(5, 5)
         self.out_layer = nn.Linear(5, 1)
         self.relu = nn.ReLU()
-        self.optim = optim.SGD(self.parameters(), lr=0.01)
+        self.optim = optim.SGD(self.parameters(), lr=0.00001)
         self.crit = nn.MSELoss()
 
     def forward(self, x):
@@ -88,17 +85,19 @@ if __name__ == "__main__":
     net = Net()
     qlearn = QLearn(net)
     env = gym.make("CartPole-v0")
-    n_episodes = 5000
+    n_episodes = 100
     for ep in range(n_episodes):
         s = env.reset()
         r = None
         is_terminal = False
         i = 0
+        a_s = []
         while not (is_terminal):
             i += 1
-            a = int(qlearn.act(s))
+            a = int(qlearn.act(s, r, is_terminal))
             s, r, is_terminal, _ = env.step(a)
-        print(i)
+            a_s.append(a)
+        print(i, a_s)
     s = env.reset()
     env.close()
     index = qlearn.get_index(s, 0.0)

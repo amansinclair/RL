@@ -20,13 +20,10 @@ class Sarsa:
 
     def choose(self, s):
         actions = self.env.get_actions(s)
+        random_a = np.random.choice(actions)
         values = np.take(self.Q[s], actions)
         best_a = actions[np.argmax(values)]
-        c = np.random.choice([0, 1], p=[self.e, 1 - self.e])
-        if c:
-            return best_a
-        else:
-            return np.random.choice(actions)
+        return np.random.choice([random_a, best_a], p=[self.e, 1 - self.e])
 
     def act(self, s, r):
         current_index = self.get_index(self.current_state, self.current_action)
