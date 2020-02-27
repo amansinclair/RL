@@ -38,9 +38,11 @@ class RandomWalk:
     def step(self):
         self.state += self.choice()
         if self.state <= 0:
+            self.state = 0
             r = 0
             is_terminal = True
         elif self.state >= self.right_terminal:
+            self.state = self.right_terminal
             r = 1
             is_terminal = True
         else:

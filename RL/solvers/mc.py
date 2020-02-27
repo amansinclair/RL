@@ -64,3 +64,46 @@ class MCOnPolicy:
                     else:
                         self.policy[index] = self.e / (len(possible_actions))
 
+
+class MCGrad:
+    """Only for 1000 random Walk testing."""
+
+    def __init__(self, W, discount_rate=1, alpha=0.00002):
+        self.W = W
+        self.discount_rate = discount_rate
+        self.alpha = alpha
+        self.N = np.zeros(len(W))
+        self.reset()
+
+    def reset(self):
+        self.states = []
+        self.rewards = []
+
+    def act(self, s, r=None, is_terminal=False, reset=True):
+        if r != None:
+            self.rewards.append(r)
+        if is_terminal:
+            self.update()
+            if reset:
+                self.reset()
+        else:
+            self.states.append(s)
+
+    def update(self):
+        G = 0
+        for i in range(len(self.states)):
+            s = self.states.pop()
+            index = s // 100
+            r = self.rewards.pop()
+            G = r + (self.discount_rate * G)
+            w_old = self.W[index]
+            self.W[index] += self.alpha * (G - w_old)
+
+    @property
+    def V(self):
+        size = 1002
+        V = np.zeros(size)
+        for i in range(1, size - 1):
+            V[i] = self.W[(i // 100) + 1]
+        return V
+
