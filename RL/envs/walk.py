@@ -24,7 +24,7 @@ class RandomWalk:
         """returns transition values (S, R, P) at s."""
         transitions = []
         right = s + 1
-        if right == self.right_terminal:
+        if right >= self.right_terminal:
             r_right = 1
         else:
             r_right = 0
@@ -37,10 +37,10 @@ class RandomWalk:
 
     def step(self):
         self.state += self.choice()
-        if self.state == 0:
+        if self.state <= 0:
             r = 0
             is_terminal = True
-        elif self.state == self.right_terminal:
+        elif self.state >= self.right_terminal:
             r = 1
             is_terminal = True
         else:
@@ -50,11 +50,60 @@ class RandomWalk:
 
     def get_probs(self, s):
         right = s + 1
-        if right == 6:
+        if right == self.right_terminal:
             r_right = 1
         else:
             r_right = 0
         return [(s - 1, 0.5, 0), (right, 0.5, r_right)]
+
+
+class TWalk(RandomWalk):
+    def __init__(self):
+        super().__init__(1000)
+
+    def get_transitions(self, s):
+        """returns transition values (S, R, P) at s."""
+        transitions = []
+        states = []
+        rewards = []
+        probabilities = []
+        p_default = 0.005
+        max_right = min(s + 100, self.right_terminal)
+        right_prob = 0.5 - (p_default * (max_right - s - 1))
+        for i in range(s + 1, max_right + 1):
+            states.append(i)
+            if i == self.right_terminal:
+                r = 1
+                p = right_prob
+            else:
+                r = 0
+                p = p_default
+            rewards.append(r)
+            probabilities.append(p)
+        min_left = max(s - 100, 0)
+        left_prob = 0.5 - (p_default * (s - min_left - 1))
+        for i in range(min_left, s):
+            states.append(i)
+            if i == 0:
+                r = -1
+                p = left_prob
+            else:
+                r = 0
+                p = p_default
+            rewards.append(r)
+            probabilities.append(p)
+        t = Transition(None, states, rewards, probabilities)
+        transitions.append(t)
+        return transitions
+
+    def choice(self):
+        return np.random.choice([-100, 100])
+
+    def step(self):
+        s, r, is_terminal = super().step()
+        if is_terminal and r == 0:
+            r = -1
+        return EnvReturn(s, r, is_terminal)
 
 
 class CliffWalk:  # 4 x 12
