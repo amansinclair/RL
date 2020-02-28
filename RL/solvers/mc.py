@@ -66,7 +66,7 @@ class MCOnPolicy:
 
 
 class MCGrad:
-    """Only for 1000 random Walk testing."""
+    """MC State AGG. Only for 1000 random Walk testing."""
 
     def __init__(self, W, discount_rate=1, alpha=0.00002):
         self.W = W
