@@ -17,10 +17,9 @@ class UniformTiling:
 
     def get_index(self, s):
         dims = np.array(s)
-        indexes = np.zeros(self.n_tilings)
+        indexes = np.zeros(self.n_tilings, dtype="int")
         for tiling in range(self.n_tilings):
-            index = ((tiling * self.offsets) + dims) // self.divisions
-            print(index)
+            index = (dims + (tiling * self.offsets)) // self.divisions
             index = index.astype("int")
             index = np.ravel_multi_index(index, self.n_divisions)
             indexes[tiling] = index + (self.n_tiles * tiling)
@@ -45,5 +44,5 @@ divisions = [5, 5]
 
 ut = UniformTiling(n_tilings, limits, divisions)
 
-ut.get_index((4.1, 2.1))
+print(ut.get_index((0.49, 1)))
 
