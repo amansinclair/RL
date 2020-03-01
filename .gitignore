@@ -1,2 +1,5 @@
 .vscode
 *.pyc
+*.pyo
+*.egg
+*.egg-info/
