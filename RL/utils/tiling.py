@@ -23,7 +23,6 @@ class UniformTiling:
         for tiling in range(self.n_tilings):
             index = (dims + (tiling * self.offsets) - mins) // self.divisions
             index = index.astype("int")
-            # print(dims, tiling, self.offsets, mins, self.divisions, index)
             index = np.ravel_multi_index(index, self.n_divisions)
             indexes[index + (self.n_tiles * tiling)] = 1
         return indexes

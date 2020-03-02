@@ -125,7 +125,11 @@ class SemiGradSarsa(NStepSarsa):
             G += (self.discount_rate ** self.n) * np.dot(
                 self.W[a], self.get_index(s, a)
             )
-        self.W[ao] = q_old + np.dot((self.alpha * (G - q_old)), index)  # CHECK
+        # print(G - q_old, q_old, G)
+        # print(q_old + ((self.alpha * (G - q_old)) * index))
+        self.W[ao] = self.W[ao] + (
+            (self.alpha * (G - q_old)) * index
+        )  # CHECK q_old to vector
 
     def get_index(self, s, a=None):
         index = self.tiling.get_index(s)
