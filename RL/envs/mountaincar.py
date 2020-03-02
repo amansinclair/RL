@@ -5,6 +5,7 @@ from .env import EnvReturn
 
 class MountainCarEnv:
     def __init__(self):
+        self.actions = [1, -1, 0]
         self.reset()
 
     @property
@@ -19,10 +20,10 @@ class MountainCarEnv:
 
     def get_actions(self, s):
         """FORWARD, REVERSE, NOTHING -> 1, -1, 0."""
-        return [1, -1, 0]
+        return [0, 1, 2]
 
     def step(self, a):
-        a = self.get_actions("")[a]
+        a = self.actions[a]
         v = self.update_vel(*self.state, a)
         x = self.update_pos(self.state[0], v)
         r = -1
