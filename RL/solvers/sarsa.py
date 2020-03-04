@@ -114,7 +114,7 @@ class SemiGradSarsa(NStepSarsa):
         values = np.zeros(self.W.shape[0])
         for a in actions:
             values[a] = np.dot(self.W[a], index)
-        best_a = actions[np.argmax(values)]
+        best_a = actions[np.random.choice(np.flatnonzero(values == values.max()))]
         return np.random.choice([random_a, best_a], p=[self.e, 1 - self.e])
 
     def update_q(self, index, s=None, a=None):
@@ -125,11 +125,7 @@ class SemiGradSarsa(NStepSarsa):
             G += (self.discount_rate ** self.n) * np.dot(
                 self.W[a], self.get_index(s, a)
             )
-        # print(G - q_old, q_old, G)
-        # print(q_old + ((self.alpha * (G - q_old)) * index))
-        self.W[ao] = self.W[ao] + (
-            (self.alpha * (G - q_old)) * index
-        )  # CHECK q_old to vector
+        self.W[ao] = self.W[ao] + ((self.alpha * (G - q_old)) * index)
 
     def get_index(self, s, a=None):
         index = self.tiling.get_index(s)

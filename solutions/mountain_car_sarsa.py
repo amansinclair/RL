@@ -7,9 +7,9 @@ import numpy as np
 from mpl_toolkits import mplot3d
 
 env = MountainCarEnv()
-n_tilings = 8
+n_tilings = 1
 limits = [(-1.2, 0.5), (-0.07, 0.07)]
-divisions = [8, 8]
+divisions = [20, 20]
 
 
 tiling = UniformTiling(n_tilings, limits, divisions)
@@ -17,13 +17,13 @@ tiles_per_tiling, total_tiles = tiling.get_size()
 # s = (0, 0)
 # print(tiling.get_index(s))
 
-W = np.zeros((3, total_tiles))
-sarsa = Sarsa(W, tiling, env, alpha=0.125)
-n_episodes = 12
+n_episodes = 100
 n_trials = 1
 
 its = np.zeros(n_episodes)
 for it in range(n_trials):
+    W = np.zeros((3, total_tiles))
+    sarsa = Sarsa(W, tiling, env, alpha=0.125)
     print("performing iteration ", it + 1)
     for ep in range(n_episodes):
         s, r, is_terminal = env.reset()
@@ -36,7 +36,9 @@ for it in range(n_trials):
         sarsa.act(s, r, is_terminal)
         its[ep] += i
 
-its = its / n_trials
+
+its = np.ceil(its / n_trials)
+print(its)
 Z = np.zeros((50, 50))
 x_inc = (0.5 + 1.2) / 49
 X = np.arange(-1.2, 0.5 + x_inc, x_inc)
@@ -52,11 +54,12 @@ for i, x in enumerate(X):
             values[a] = np.dot(sarsa.W[a], index)
         Z[i, j] = abs(np.max(values))
 
-plt.imshow(Z)
-# fig = plt.figure()
-# ax = plt.axes(projection="3d")
 
-# ax.plot_surface(X, Y, Z)
-# plt.plot(its)
+fig, ax = plt.subplots(1, 1)
+
+img = ax.imshow(Z)
+
+fig.colorbar(img)
 plt.show()
 
+print(np.mean(its))
