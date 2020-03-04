@@ -59,3 +59,81 @@ class WindyEnv:
 
     def check_y(self, y):
         return max(min(6, y), 0)
+
+
+class ContinuousEnv:
+    def __init__(self):
+        self.x_min = -1.2
+        self.x_max = 0.5
+        self.y_min = -0.07
+        self.y_max = 0.07
+        self.holes = [(0.0, 0.0), (-1.0, -0.03), (0.3, 0.05), (0.3, -0.05)]
+
+    def get_actions(self, s):
+        """UP, DOWN, RIGHT, LEFT -> 0, 1, 2, 3."""
+        return [a for a in range(4)]
+
+    def reset(self):
+        x = np.random.uniform(-1.1, -0.9)
+        y = 0
+        self.state = (x, y)
+        return EnvReturn(self.state, None, False)
+
+    def step(self, a):
+        if a == 0:
+            dx = 0
+            dy = 0.007
+        elif a == 1:
+            dx = 0
+            dy = -0.007
+        elif a == 2:
+            dx = 0.085
+            dy = 0
+        else:
+            dx = -0.085
+            dy = 0
+        y = self.check_y(self.state[1] + dy)
+        x = self.check_x(self.state[0] + dx)
+        if self.is_in_hole(x, y):
+            return self.reset()
+        self.state = (x, y)
+        return EnvReturn(self.state, -1, (x >= self.x_max))
+
+    def check_x(self, x):
+        return max(min(self.x_max, x), self.x_min)
+
+    def check_y(self, y):
+        return max(min(self.y_max, y), self.y_min)
+
+    def is_in_hole(self, x, y):
+        for hole_x, hole_y in self.holes:
+            if x > hole_x - 0.1 and x < hole_x + 0.1:
+                if y > hole_y - 0.01 and y < hole_y + 0.01:
+                    return True
+        return False
+
+    def get_map(self):
+        envmap = np.zeros((100, 100))
+        dx = (self.x_max - self.x_min) / 100
+        dy = (self.y_max - self.y_min) / 100
+        for i in range(100):
+            x = self.x_min + (i * dx)
+            for j in range(100):
+                y = self.y_min + (j * dy)
+                if self.is_in_hole(x, y):
+                    envmap[i, j] = 10
+        return envmap
+
+    def show_path(self, states):
+        envmap = self.get_map()
+        ds = 10 / len(states)
+        shade = 1
+        x_range = self.x_max - self.x_min
+        y_range = self.y_max - self.y_min
+        for x, y in states:
+            shade += ds
+            x = int(((x - self.x_min) / x_range) * 99)
+            y = int(((y - self.y_min) / y_range) * 99)
+            envmap[x, y] = shade
+        return envmap
+

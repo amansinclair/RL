@@ -94,10 +94,11 @@ class NStepSarsa(Sarsa):
             index = self.get_index(s, a)
             self.rewards.popleft()
             self.update_q(index)
+        self.reset()
 
 
 class SemiGradSarsa(NStepSarsa):
-    def __init__(self, W, tiling, env, n=3, discount_rate=1, e=0.1, alpha=0.1):
+    def __init__(self, W, tiling, env, n=3, discount_rate=1, e=0.05, alpha=0.1):
         self.W = W
         self.tiling = tiling
         self.env = env
