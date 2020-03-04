@@ -50,12 +50,12 @@ for i, x in enumerate(X):
             values[a] = np.dot(sarsa.W[a], index)
         Z[i, j] = abs(np.max(values))
 
-
+Z = np.flip(Z, axis=1)
 fig, ax = plt.subplots(1, 2)
 ax[0].plot(its)
-img = ax[1].imshow(Z)
-ax[1].set_xlabel("Speed 0.07 to -0.07")
-ax[1].set_ylabel("Position -1.2 to 0.5")
+img = ax[1].imshow(Z.T)
+ax[1].set_xlabel("Position")
+ax[1].set_ylabel("Speed")
 
 fig.colorbar(img)
 plt.show()
