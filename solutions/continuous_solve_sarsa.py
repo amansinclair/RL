@@ -11,7 +11,7 @@ divisions = [20, 20]
 tiling = UniformTiling(n_tilings, limits, divisions)
 tiles_per_tiling, total_tiles = tiling.get_size()
 n_episodes = 100
-n_trials = 10
+n_trials = 1
 
 fig, ax = plt.subplots(2, 1)
 its = np.zeros(n_episodes)
