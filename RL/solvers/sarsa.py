@@ -110,13 +110,21 @@ class SemiGradSarsa(NStepSarsa):
 
     def choose(self, s):
         actions = self.env.get_actions(s)
+        best_a = self.get_best_action(s, actions)
         random_a = np.random.choice(actions)
-        index = self.get_index(s)
+        return np.random.choice([random_a, best_a], p=[self.e, 1 - self.e])
+
+    def get_best_action(self, s, actions):
         values = np.zeros(self.W.shape[0])
+        index = self.get_index(s)
         for a in actions:
             values[a] = np.dot(self.W[a], index)
-        best_a = actions[np.random.choice(np.flatnonzero(values == values.max()))]
-        return np.random.choice([random_a, best_a], p=[self.e, 1 - self.e])
+        a = actions[np.random.choice(np.flatnonzero(values == values.max()))]
+        return a
+
+    def play(self, s, *args):
+        actions = self.env.get_actions(s)
+        return self.get_best_action(s, actions)
 
     def update_q(self, index, s=None, a=None):
         ao = self.actions[0]
