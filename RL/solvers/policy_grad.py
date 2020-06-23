@@ -5,13 +5,14 @@ import torch.optim as optim
 import numpy as np
 import gym
 import time
+import matplotlib.pyplot as plt
 
 
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(4, 16)
-        self.fc2 = nn.Linear(16, 2)
+        self.fc1 = nn.Linear(4, 32)
+        self.fc2 = nn.Linear(32, 2)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -19,19 +20,22 @@ class Net(nn.Module):
         return F.softmax(x, dim=0)
 
 
-def get_return(rewards):
-    g = torch.flip(rewards, [0]).cumsum(0)
-    g = torch.flip(g, [0])
-    return g
+def get_return(rewards, gamma=0.9):
+    discounted_return = torch.zeros(rewards.shape, dtype=torch.float32)
+    g = 0
+    for i in reversed(range(len(rewards))):
+        g = rewards[i] + (gamma * g)
+        discounted_return[i] = g
+    return discounted_return
 
 
 def play_single(net, env, view=False):
-    probs = torch.zeros((200), dtype=torch.float32)
-    rewards = torch.zeros((200), dtype=torch.float32)
+    probs = torch.zeros((1000), dtype=torch.float32)
+    rewards = torch.zeros((1000), dtype=torch.float32)
     observation = torch.tensor(env.reset(), dtype=torch.float32)
     done = False
     i = 0
-    while not done:
+    while not done and i < 1000:
         if view:
             env.render()
             time.sleep(0.1)
@@ -43,7 +47,7 @@ def play_single(net, env, view=False):
         rewards[i] = reward
         i += 1
     g = get_return(rewards[:i])
-    return (probs[:i], g)
+    return (probs[:i], g, rewards[:i].sum())
 
 
 def play(net, env, batch_size=1000):
@@ -51,23 +55,25 @@ def play(net, env, batch_size=1000):
     gs = []
     current_size = 0
     i = 0
+    score = 0
     while current_size < batch_size:
-        prob, g = play_single(net, env)
+        prob, g, r = play_single(net, env)
         probs.append(prob)
         gs.append(g)
         current_size += prob.shape[0]
         i += 1
-    return i, torch.cat(probs), torch.cat(gs)
+        score += r
+    return i, score / i, torch.cat(probs), torch.cat(gs)
 
 
 def train_batch(net, opt, env):
     opt.zero_grad()
-    i, probs, gs = play(net, env)
+    n, score, probs, gs = play(net, env)
     loss = -(gs * torch.log(probs)).mean()
     # print(loss)
     loss.backward()
     opt.step()
-    return i
+    return score, n
 
 
 def view_round(net, env):
@@ -75,13 +81,19 @@ def view_round(net, env):
         play_single(net, env, True)
 
 
-learning_rate = 0.01
+learning_rate = 0.03
 net = Net()
 opt = optim.Adam(net.parameters(), lr=learning_rate)
 env = gym.make("CartPole-v1")
-n = 0
-for i in range(30):
-    n += train_batch(net, opt, env)
-    print(n)
+scores = []
+episodes = []
+for i in range(50):
+    print(i)
+    score, n = train_batch(net, opt, env)
+    scores.append(score)
+    episodes.append(n)
+print(scores)
 view_round(net, env)
 env.close()
+plt.plot(np.cumsum(episodes), scores)
+plt.show()
