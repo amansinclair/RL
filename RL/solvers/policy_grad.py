@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 
 
 class Policy(nn.Module):
-    def __init__(self, n_inputs, n_outputs):
+    def __init__(self, n_inputs, n_outputs, size=8):
         super().__init__()
-        self.fc1 = nn.Linear(n_inputs, 8)
-        self.fc2 = nn.Linear(8, n_outputs)
+        self.fc1 = nn.Linear(n_inputs, size)
+        self.fc2 = nn.Linear(size, n_outputs)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -79,15 +79,14 @@ class MCPG(nn.Module):
     def calculate_score(self):
         G = torch.stack(self.returns)
         p = torch.stack(self.probs)
-        print(p.shape, G.shape)
         return -(G * torch.log(p)).mean()
 
 
 class Value(nn.Module):
-    def __init__(self, n_inputs):
+    def __init__(self, n_inputs, size=8):
         super().__init__()
-        self.fc1 = nn.Linear(n_inputs, 8)
-        self.fc2 = nn.Linear(8, 1)
+        self.fc1 = nn.Linear(n_inputs, size)
+        self.fc2 = nn.Linear(size, 1)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -116,3 +115,42 @@ class MCPGBaseline(MCPG):
         error = G - V
         mse = (error ** 2).mean()
         return -(error.detach() * torch.log(p)).mean() + mse
+
+
+class A2C(nn.Module):
+    def __init__(self, env, lr=0.01, gamma=1):
+        super().__init__()
+        n_inputs = env.observation_space.shape[0]
+        n_outputs = env.action_space.n
+        self.policy = Policy(n_inputs, n_outputs, size=16)
+        self.value = Value(n_inputs, size=16)
+        self.opt = optim.Adam(self.parameters(), lr=lr)
+        self.gamma = gamma
+        self.previous = None
+
+    def step(self, observation, reward=None, is_done=False):
+        observation = torch.tensor(observation, dtype=torch.float32)
+        prob = self.policy(observation)
+        m = Categorical(prob)
+        action = m.sample().item()
+        if self.previous:
+            self.update_weights(observation, reward, is_done)
+        self.previous = (observation, prob[action]) if not is_done else None
+        return action
+
+    def update_weights(self, observation, reward, is_done):
+        self.opt.zero_grad()
+        score = self.calculate_score(observation, reward, is_done)
+        score.backward()
+        self.opt.step()
+
+    def calculate_score(self, observation, reward, is_done):
+        previous_observation, p = self.previous
+        value = self.value(previous_observation)
+        with torch.no_grad():
+            next_value = self.value(observation)
+        advantage = reward + (((1.0 - is_done) * self.gamma * next_value) - value)
+        # print("advantage", advantage)
+        mse = advantage ** 2
+        return -(advantage.detach() * torch.log(p)).mean() + mse
+
