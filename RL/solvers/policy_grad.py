@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 
 
 class Policy(nn.Module):
-    def __init__(self):
+    def __init__(self, n_inputs, n_outputs):
         super().__init__()
-        self.fc1 = nn.Linear(4, 8)
-        self.fc2 = nn.Linear(8, 2)
+        self.fc1 = nn.Linear(n_inputs, 8)
+        self.fc2 = nn.Linear(8, n_outputs)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -21,10 +21,72 @@ class Policy(nn.Module):
         return F.softmax(x, dim=0)
 
 
-class Value(nn.Module):
-    def __init__(self):
+def get_return(rewards, gamma=1):
+    size = len(rewards)
+    discounted_return = torch.zeros(size, dtype=torch.float32)
+    g = 0
+    for i in reversed(range(size)):
+        g = rewards[i] + (gamma * g)
+        discounted_return[i] = g
+    return discounted_return
+
+
+class MCPG(nn.Module):
+    def __init__(self, env, batch_size=100, lr=0.02, gamma=1):
         super().__init__()
-        self.fc1 = nn.Linear(4, 8)
+        n_inputs = env.observation_space.shape[0]
+        n_outputs = env.action_space.n
+        self.setup(n_inputs, n_outputs, lr)
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.rewards = []
+        self.reset_batch()
+
+    def setup(self, n_inputs, n_outputs, lr):
+        self.policy = Policy(n_inputs, n_outputs)
+        self.opt = optim.Adam(self.parameters(), lr=lr)
+
+    def reset_batch(self):
+        self.returns = []
+        self.probs = []
+
+    def step(self, observation, reward=None):
+        if reward != None:
+            self.rewards.append(reward)
+        observation = torch.tensor(observation, dtype=torch.float32)
+        prob = self.policy(observation)
+        m = Categorical(prob)
+        action = m.sample().item()
+        self.probs.append(prob[action])
+        return action
+
+    def update(self, reward):
+        self.rewards.append(reward)
+        total_reward = sum(self.rewards)
+        self.returns.extend(get_return(self.rewards, self.gamma))
+        self.rewards = []
+        if len(self.returns) >= self.batch_size:
+            self.update_weights()
+            self.reset_batch()
+        return total_reward
+
+    def update_weights(self):
+        self.opt.zero_grad()
+        score = self.calculate_score()
+        score.backward()
+        self.opt.step()
+
+    def calculate_score(self):
+        G = torch.stack(self.returns)
+        p = torch.stack(self.probs)
+        print(p.shape, G.shape)
+        return -(G * torch.log(p)).mean()
+
+
+class Value(nn.Module):
+    def __init__(self, n_inputs):
+        super().__init__()
+        self.fc1 = nn.Linear(n_inputs, 8)
         self.fc2 = nn.Linear(8, 1)
 
     def forward(self, x):
@@ -32,90 +94,25 @@ class Value(nn.Module):
         return self.fc2(x)
 
 
-def get_return(rewards, gamma=1):
-    discounted_return = torch.zeros(rewards.shape, dtype=torch.float32)
-    g = 0
-    for i in reversed(range(len(rewards))):
-        g = rewards[i] + (gamma * g)
-        discounted_return[i] = g
-    return discounted_return
+class MCPGBaseline(MCPG):
+    def setup(self, n_inputs, n_outputs, lr):
+        self.policy = Policy(n_inputs, n_outputs)
+        self.value = Value(n_inputs)
+        self.opt = optim.Adam(self.policy.parameters(), lr=lr)
 
+    def reset_batch(self):
+        super().reset_batch()
+        self.values = []
 
-def play_single(policy, value, env, view=False):
-    probs = torch.zeros((1000), dtype=torch.float32)
-    rewards = torch.zeros((1000), dtype=torch.float32)
-    observation = torch.tensor(env.reset(), dtype=torch.float32)
-    values = torch.zeros((1000), dtype=torch.float32)
-    done = False
-    i = 0
-    while not done and i < 1000:
-        if view:
-            env.render()
-            time.sleep(0.1)
-        p = policy(observation)
-        v = value(observation)
-        values[i] = v
-        m = Categorical(p)
-        action = m.sample().item()
-        probs[i] = p[action]
-        observation, reward, done, info = env.step(action)
+    def step(self, observation, reward=None):
         observation = torch.tensor(observation, dtype=torch.float32)
-        rewards[i] = reward
-        i += 1
-    g = get_return(rewards[:i])
-    return (probs[:i], values[:i], g, rewards[:i].sum())
+        self.values.append(self.value(observation))
+        return super().step(observation, reward=reward)
 
-
-def play(policy, value, env, n_episodes=5):
-    probs = []
-    gs = []
-    vs = []
-    score = 0
-    for i in range(n_episodes):
-        prob, v, g, r = play_single(policy, value, env)
-        probs.append(prob)
-        gs.append(g)
-        vs.append(v)
-        score += r
-    return score / n_episodes, torch.cat(probs), torch.cat(vs), torch.cat(gs)
-
-
-def train_batch(policy, value, opts, env):
-    for opt in opts:
-        opt.zero_grad()
-    avg_return, probs, vs, gs = play(policy, value, env)
-    error = gs - vs
-    mse = (error ** 2).mean()
-    mse.backward()
-    score = -(error.detach() * torch.log(probs)).mean()
-    # print(mean_error, score)
-    # mean_error.backward()
-    print(avg_return)
-    score.backward()
-    for opt in opts:
-        opt.step()
-    return avg_return
-
-
-def view_round(policy, value, env):
-    with torch.no_grad():
-        play_single(policy, value, env, True)
-
-
-policy = Policy()
-value = Value()
-opt_p = optim.Adam(policy.parameters(), lr=0.1)
-opt_v = optim.Adam(value.parameters(), lr=0.1)
-opts = [opt_p, opt_v]
-env = gym.make("CartPole-v1")
-scores = []
-n_batches = 50
-n_episodes = 5
-for i in range(n_batches):
-    score = train_batch(policy, value, opts, env)
-    scores.append(score)
-print(scores)
-view_round(policy, value, env)
-env.close()
-plt.plot([i for i in range(0, n_batches * n_episodes, n_episodes)], scores)
-plt.show()
+    def calculate_score(self):
+        G = torch.stack(self.returns)
+        p = torch.stack(self.probs)
+        V = torch.stack(self.values)
+        error = G - V
+        mse = (error ** 2).mean()
+        return -(error.detach() * torch.log(p)).mean() + mse
