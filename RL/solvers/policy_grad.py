@@ -150,7 +150,6 @@ class A2C(nn.Module):
         with torch.no_grad():
             next_value = self.value(observation)
         advantage = reward + (((1.0 - is_done) * self.gamma * next_value) - value)
-        # print("advantage", advantage)
         mse = advantage ** 2
         return -(advantage.detach() * torch.log(p)).mean() + mse
 
