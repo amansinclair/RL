@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 class Policy(nn.Module):
-    def __init__(self, n_inputs, n_outputs, size=8):
+    def __init__(self, n_inputs, n_outputs, size=16):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
         self.fc2 = nn.Linear(size, n_outputs)
@@ -81,16 +81,22 @@ class MCPG(nn.Module):
         p = torch.stack(self.probs)
         return -(G * torch.log(p)).mean()
 
+    @property
+    def name(self):
+        return str(self.__class__.__name__)
+
 
 class Value(nn.Module):
-    def __init__(self, n_inputs, size=8):
+    def __init__(self, n_inputs, size=16):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
-        self.fc2 = nn.Linear(size, 1)
+        self.fc2 = nn.Linear(size, size)
+        self.fc3 = nn.Linear(size, 1)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        return self.fc2(x)
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
 
 
 class MCPGBaseline(MCPG):
