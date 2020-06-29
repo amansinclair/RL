@@ -3,10 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-import numpy as np
-import gym
-import time
-import matplotlib.pyplot as plt
 
 
 class Policy(nn.Module):
