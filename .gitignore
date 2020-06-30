@@ -3,5 +3,5 @@
 *.pyo
 *.egg
 *.egg-info/
-.tmp
-./solutions/shit.py
+*.tmp
+.solutions/shit.py
