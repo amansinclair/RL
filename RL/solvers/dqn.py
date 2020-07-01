@@ -8,7 +8,7 @@ import random
 
 
 class Q(nn.Module):
-    def __init__(self, n_inputs, n_outputs, size=64):
+    def __init__(self, n_inputs, n_outputs, size=128):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
         self.fc2 = nn.Linear(size, size)
@@ -19,6 +19,71 @@ class Q(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
+
+
+class Policy:
+    def __init__(self, n_actions, e=0.3, decay=0.995):
+        self.actions = [a for a in range(n_actions)]
+        self.e = e
+        self.decay = decay
+
+    def get_action(self, best_action):
+        if random.choices([True, False], weights=[1 - self.e, self.e])[0]:
+            action = best_action
+        else:
+            action = random.choice(self.actions)
+        return action
+
+    def update(self):
+        self.e = max(self.decay * self.e, 0.01)
+
+
+class DQN:
+    def __init__(self, env, lr=0.01, gamma=0.99, e=0.1):
+        n_inputs = n_inputs = env.observation_space.shape[0]
+        n_outputs = env.action_space.n
+        self.lr = lr
+        self.gamma = gamma
+        self.policy = Policy(n_outputs, e)
+        self.Q = Q(n_inputs, n_outputs)
+        self.opt = optim.Adam(self.Q.parameters(), lr=lr)
+        self.crit = nn.MSELoss()
+        self.previous = None
+
+    def step(self, observation, reward=None, is_done=False):
+        observation = torch.tensor(observation, dtype=torch.float32)
+        best_action = self.get_best_action(observation)
+        action = self.policy.get_action(best_action)
+        if reward != None:
+            previous_obs, previous_a = self.previous
+            self.update_weights(previous_obs, previous_a, reward, observation, is_done)
+        self.previous = (observation, action)
+        if is_done:
+            self.policy.update()
+        return action
+
+    def get_best_action(self, observation):
+        with torch.no_grad():
+            action_values = self.Q(observation)
+        return torch.argmax(action_values).item()
+
+    def update_weights(self, state, action, reward, next_state, is_done):
+        self.opt.zero_grad()
+        ys = self.get_labels(reward, next_state, is_done)
+        qs = self.get_qs(state, action)
+        loss = self.crit(qs, ys)
+        loss.backward()
+        self.opt.step()
+
+    def get_labels(self, reward, next_state, is_done):
+        is_done = 0 if is_done else 1
+        with torch.no_grad():
+            qmax = torch.max(self.Q(next_state))
+            y = (self.gamma * qmax * is_done) + reward
+        return y
+
+    def get_qs(self, state, action):
+        return self.Q(state)[action]
 
 
 Replay = namedtuple("Replay", "state action reward next_state is_done")
@@ -60,29 +125,27 @@ class Replays:
         )
 
 
-class DQN:
+class DQNReplay:
     def __init__(
-        self, env, batch_size=128, lr=0.01, gamma=0.99, e=0.1, steps_per_update=10
+        self, env, batch_size=32, lr=0.01, gamma=0.99, e=0.1, steps_per_update=10
     ):
         n_inputs = n_inputs = env.observation_space.shape[0]
         n_outputs = env.action_space.n
+        self.policy = Policy(n_outputs, e)
         self.replays = Replays()
         self.Q = Q(n_inputs, n_outputs)
         self.opt = optim.Adam(self.Q.parameters(), lr=lr)
         self.batch_size = batch_size
         self.gamma = gamma
-        self.steps_per_update = steps_per_update
-        self.base_probs = [e / (n_outputs - 1)] * n_outputs
-        self.max_prob = 1 - e
-        self.actions = [a for a in range(n_outputs)]
         self.previous = None
         self.steps = 0
-        self.loss = nn.MSELoss()
+        self.crit = nn.MSELoss()
 
     def step(self, observation, reward=None, is_done=False):
         self.steps += 1
         observation = torch.tensor(observation, dtype=torch.float32)
-        action = self.get_action(observation)
+        best_action = self.get_best_action(observation)
+        action = self.policy.get_action(best_action)
         if reward != None:
             previous_obs, previous_a = self.previous
             self.replays.add(
@@ -92,27 +155,25 @@ class DQN:
                 len(self.replays) >= self.batch_size
                 and self.steps % self.steps_per_update == 0
             ):
-                self.update()
+                self.update_weights()
         self.previous = (observation, action)
+        if is_done:
+            self.policy.update()
         return action
 
-    def get_action(self, observation):
+    def get_best_action(self, observation):
         with torch.no_grad():
             action_values = self.Q(observation)
-        max_action = torch.argmax(action_values)
-        probs = self.base_probs.copy()
-        probs[max_action] = self.max_prob
-        action = random.choices(self.actions, weights=probs)[0]
-        return action
+        return torch.argmax(action_values).item()
 
-    def update(self):
+    def update_weights(self):
         states, actions, rewards, next_states, is_dones = self.replays.get_batch(
             self.batch_size
         )
         self.opt.zero_grad()
         ys = self.get_labels(rewards, next_states, is_dones)
         qs = self.get_qs(states, actions)
-        loss = self.loss(qs, ys)  # calculate_loss(qs, ys)
+        loss = self.crit(qs, ys)
         loss.backward()
         self.opt.step()
 
@@ -124,7 +185,4 @@ class DQN:
 
     def get_qs(self, states, actions):
         return torch.gather(self.Q(states), 1, actions).view(-1)
-
-    # def calculate_loss(self, qs, ys):
-    #    return ((qs - ys) ** 2).mean()
 
