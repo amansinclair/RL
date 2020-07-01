@@ -8,7 +8,7 @@ import torch
 env = gym.make("MountainCar-v0")
 # env._max_episode_steps = 500
 n_episodes = 100
-agent = MCPG(env, lr=0.03)
+agent = MCPG(env, lr=0.001, gamma=0.99)
 total_rewards = []
 for episode in range(n_episodes):
     observation = env.reset()
@@ -16,7 +16,7 @@ for episode in range(n_episodes):
     reward = None
     rewards = []
     while not done:
-        # env.render()
+        env.render()
         action = agent.step(observation, reward)
         observation, reward, done, info = env.step(action)
         rewards.append(reward)

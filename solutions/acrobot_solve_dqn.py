@@ -5,9 +5,9 @@ import numpy as np
 import torch
 
 
-env = gym.make("MountainCar-v0")
+env = gym.make("Acrobot-v1")
 # env._max_episode_steps = 500
-n_episodes = 100
+n_episodes = 10
 agent = DQNReplay(env, gamma=0.99, e=0.05)
 total_rewards = []
 for episode in range(n_episodes):
@@ -24,11 +24,5 @@ for episode in range(n_episodes):
     total_reward = sum(rewards)
     print("episode", episode + 1, total_reward, agent.policy.e)
     total_rewards.append(total_reward)
-observation = env.reset()
-done = False
-while not done:
-    env.render()
-    action = agent.step(observation, reward, done)
-    observation, reward, done, info = env.step(action)
 env.close()
 print(total_rewards)
