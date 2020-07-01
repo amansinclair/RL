@@ -4,4 +4,4 @@ from .qlearn import QLearn
 from .sarsa import Sarsa, NStepSarsa, SemiGradSarsa
 from .td import TDV, TDGrad
 from .policy_grad import MCPG, MCPGBaseline, A2C
-from .dqn import DQN
+from .dqn import DQN, DQNReplay

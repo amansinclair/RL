@@ -137,6 +137,7 @@ class DQNReplay:
         self.opt = optim.Adam(self.Q.parameters(), lr=lr)
         self.batch_size = batch_size
         self.gamma = gamma
+        self.steps_per_update = steps_per_update
         self.previous = None
         self.steps = 0
         self.crit = nn.MSELoss()
