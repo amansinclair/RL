@@ -90,7 +90,7 @@ Replay = namedtuple("Replay", "state action reward next_state is_done")
 
 
 class Replays:
-    def __init__(self, maxlen=1000):
+    def __init__(self, maxlen=10000):
         self.maxlen = maxlen
         self.count = 0
         self.replays = deque(maxlen=maxlen)
@@ -127,7 +127,7 @@ class Replays:
 
 class DQNReplay:
     def __init__(
-        self, env, batch_size=32, lr=0.01, gamma=0.99, e=0.1, steps_per_update=10
+        self, env, batch_size=64, lr=0.01, gamma=0.99, e=0.1, steps_per_update=1
     ):
         n_inputs = n_inputs = env.observation_space.shape[0]
         n_outputs = env.action_space.n
