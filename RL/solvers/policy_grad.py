@@ -1,3 +1,4 @@
+from collections import deque
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -99,7 +100,6 @@ class MCPGBaseline(MCPG):
     def setup(self, n_inputs, n_outputs, lr=0.01):
         self.policy = Policy(n_inputs, n_outputs)
         self.value = Value(n_inputs)
-        # self.opt = optim.Adam(self.parameters(), lr=lr)
         self.opt = optim.Adam(self.policy.parameters(), lr=lr)
         self.vopt = optim.Adam(self.value.parameters(), lr=0.1)
 
@@ -123,45 +123,104 @@ class MCPGBaseline(MCPG):
     def calculate_score(self):
         G = torch.stack(self.returns)
         p = torch.stack(self.probs)
-        V = torch.stack(self.values)
+        V = torch.stack(self.values).view(-1)
         error = G - V
         mse = (error ** 2).mean()
         return (-error.detach() * torch.log(p)).mean() + mse
 
 
 class A2C(nn.Module):
-    def __init__(self, env, lr=0.01, gamma=1):
+    def __init__(self, env, lr=0.01, gamma=0.99, vlr=0.1, tdlen=5, batch_size=100):
         super().__init__()
         n_inputs = env.observation_space.shape[0]
         n_outputs = env.action_space.n
         self.policy = Policy(n_inputs, n_outputs, size=16)
         self.value = Value(n_inputs, size=16)
-        self.opt = optim.Adam(self.parameters(), lr=lr)
+        self.opt = optim.Adam(self.policy.parameters(), lr=lr)
+        self.vopt = optim.Adam(self.value.parameters(), lr=vlr)
         self.gamma = gamma
-        self.previous = None
+        self.tdlen = tdlen
+        self.batch_size = batch_size
+        self.reset()
+        self.episode_reset()
 
-    def step(self, observation, reward=None, is_done=False):
+    def reset(self):
+        self.obs = []
+        self.probs = []
+        self.returns = []
+
+    def episode_reset(self):
+        self.steps = 0
+        self.rewards = deque(maxlen=self.tdlen + 1)
+
+    def step(self, observation, reward=None):
         observation = torch.tensor(observation, dtype=torch.float32)
         prob = self.policy(observation)
         m = Categorical(prob)
         action = m.sample().item()
-        if self.previous:
-            self.update_weights(observation, reward, is_done)
-        self.previous = (observation, prob[action]) if not is_done else None
+        if reward != None:
+            self.rewards.append(reward)
+        self.probs.append(prob[action])
+        self.obs.append(observation)
+        if self.steps > self.tdlen:
+            self.returns.append(self.get_return())
+        self.steps += 1
         return action
 
-    def update_weights(self, observation, reward, is_done):
+    def get_return(self):
+        with torch.no_grad():
+            V = self.value(self.obs[-1]).item() * self.gamma ** (self.tdlen + 1)
+        R = self.get_summed_rs()
+        return V + R
+
+    def get_summed_rs(self):
+        R = 0.0
+        for r in reversed(self.rewards):
+            R = r + (R * self.gamma)
+        return R
+
+    def update(self, reward):
+        self.rewards.append(reward)
+        self.update_tail_returns()
+        if len(self.obs) >= self.batch_size:
+            self.update_weights()
+            self.reset()
+        self.episode_reset()
+
+    def update_tail_returns(self):
+        while self.rewards:
+            self.returns.append(self.get_summed_rs())
+            self.rewards.popleft()
+
+    def update_weights(self):
         self.opt.zero_grad()
-        score = self.calculate_score(observation, reward, is_done)
+        self.vopt.zero_grad()
+        score = self.calculate_score()
         score.backward()
         self.opt.step()
+        self.vopt.step()
 
-    def calculate_score(self, observation, reward, is_done):
-        previous_observation, p = self.previous
-        value = self.value(previous_observation)
-        with torch.no_grad():
-            next_value = self.value(observation)
-        advantage = reward + (((1.0 - is_done) * self.gamma * next_value) - value)
-        mse = advantage ** 2
-        return -(advantage.detach() * torch.log(p)).mean() + mse
+    def calculate_score(self):
+        p = torch.tensor(self.probs, dtype=torch.float32)
+        obs = torch.stack(self.obs)
+        td_returns = torch.tensor(self.returns, dtype=torch.float32)
+        values = self.value(obs).view(-1)
+        advantage = td_returns - values
+        mse = (advantage ** 2).mean()
+        return (-advantage.detach() * torch.log(p)).mean() + mse
+
+    def calculate_td_values(self, values, rewards):
+        n_iter = values.shape[0]
+        next_values = torch.zeros(n_iter, dtype=torch.float32)
+        for i in range(n_iter):
+            td_idx = i + self.tdlen
+            end_value = (
+                0
+                if td_idx >= n_iter
+                else values[td_idx] * self.gamma ** (self.tdlen + 1)
+            )
+            end_idx = min(td_idx, n_iter)
+            summed_rs = self.get_summed_rs(rewards[i:end_idx])
+            next_values[i] = end_value + summed_rs
+        return next_values
 

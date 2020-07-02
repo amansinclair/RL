@@ -9,10 +9,10 @@ env._max_episode_steps = 1000
 fig = plt.figure()
 
 all_rewards = []
-for b in range(10):
-    agent = MCPGBaseline(env, lr=0.03)
+for b in range(1):
+    agent = MCPGBaseline(env, lr=0.03, gamma=0.99)
     total_rewards = []
-    n_episodes = 150
+    n_episodes = 100
     for episode in range(n_episodes):
         observation = env.reset()
         done = False
