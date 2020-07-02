@@ -75,7 +75,7 @@ class MCPG(nn.Module):
     def calculate_score(self):
         G = torch.stack(self.returns)
         p = torch.stack(self.probs)
-        return -(G * torch.log(p)).mean()
+        return (-G * torch.log(p)).mean()
 
     @property
     def name(self):
@@ -96,10 +96,12 @@ class Value(nn.Module):
 
 
 class MCPGBaseline(MCPG):
-    def setup(self, n_inputs, n_outputs, lr):
+    def setup(self, n_inputs, n_outputs, lr=0.01):
         self.policy = Policy(n_inputs, n_outputs)
         self.value = Value(n_inputs)
+        # self.opt = optim.Adam(self.parameters(), lr=lr)
         self.opt = optim.Adam(self.policy.parameters(), lr=lr)
+        self.vopt = optim.Adam(self.value.parameters(), lr=0.1)
 
     def reset_batch(self):
         super().reset_batch()
@@ -110,13 +112,21 @@ class MCPGBaseline(MCPG):
         self.values.append(self.value(observation))
         return super().step(observation, reward=reward)
 
+    def update_weights(self):
+        self.opt.zero_grad()
+        self.vopt.zero_grad()
+        score = self.calculate_score()
+        score.backward()
+        self.opt.step()
+        self.vopt.step()
+
     def calculate_score(self):
         G = torch.stack(self.returns)
         p = torch.stack(self.probs)
         V = torch.stack(self.values)
         error = G - V
         mse = (error ** 2).mean()
-        return -(error.detach() * torch.log(p)).mean() + mse
+        return (-error.detach() * torch.log(p)).mean() + mse
 
 
 class A2C(nn.Module):
