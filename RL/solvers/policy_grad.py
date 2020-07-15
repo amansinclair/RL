@@ -28,6 +28,19 @@ class Policy(nn.Module):
         return F.softmax(x, dim=-1)
 
 
+class Value(nn.Module):
+    def __init__(self, n_inputs, size=16):
+        super().__init__()
+        self.fc1 = nn.Linear(n_inputs, size)
+        self.fc2 = nn.Linear(size, size)
+        self.fc3 = nn.Linear(size, 1)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
+
+
 class Agent:
     def __init__(self, env, gamma=1, plr=0.03, vlr=0.1, batch_size=100):
         self.gamma = gamma
@@ -107,6 +120,36 @@ class Agent:
         return discounted_return
 
 
+class TDAgent(Agent):
+    def __init__(self, *args, td, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tdlen = td + 1
+
+    def get_return(self):
+        end = self.tdlen
+        returns = []
+        with torch.no_grad():
+            while end < len(self.rewards):
+                r = self.rewards[end - self.tdlen : end]
+                G = self.get_summed_rs(r)
+                V = self.value(self.obs[end])
+                returns.append(G + V.item())
+                end += 1
+        self.rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
+        end_returns = super().get_return()
+        if returns:
+            start_returns = torch.tensor(returns)
+            return torch.cat((start_returns, end_returns))
+        else:
+            return end_returns
+
+    def get_summed_rs(self, rewards):
+        R = 0.0
+        for r in reversed(rewards):
+            R = r + (R * self.gamma)
+        return R
+
+
 class MCPG(nn.Module):
     def __init__(self, env, batch_size=100, lr=0.02, gamma=1):
         super().__init__()
@@ -161,19 +204,6 @@ class MCPG(nn.Module):
     @property
     def name(self):
         return str(self.__class__.__name__)
-
-
-class Value(nn.Module):
-    def __init__(self, n_inputs, size=16):
-        super().__init__()
-        self.fc1 = nn.Linear(n_inputs, size)
-        self.fc2 = nn.Linear(size, size)
-        self.fc3 = nn.Linear(size, 1)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
 
 
 class MCPGBaseline(MCPG):
