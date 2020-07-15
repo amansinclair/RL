@@ -1,12 +1,16 @@
 import gym
 import matplotlib.pyplot as plt
-from RL.solvers import A2C
+from RL.solvers import A2C, MCPGBaseline, MCPG, Agent
 import numpy as np
+import torch.nn as nn
 
 env = gym.make("CartPole-v1")
 all_rewards = []
-for b in range(1):
-    agent = A2C(env, lr=0.03, gamma=0.99, tdlen=100)
+for b in range(10):
+    # agent = MCPG(env)
+    agent = Agent(env)
+    # agent = A2C(env, lr=0.03, gamma=1, tdlen=100, batch_size=100)
+    # agent = MCPGBaseline(env, lr=0.03, gamma=1, batch_size=100)
     total_rewards = []
     n_episodes = 100
     for episode in range(n_episodes):

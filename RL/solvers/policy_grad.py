@@ -6,6 +6,16 @@ import torch.optim as optim
 from torch.distributions import Categorical
 
 
+def get_return(rewards, gamma):
+    size = len(rewards)
+    discounted_return = torch.zeros(size, dtype=torch.float32)
+    g = 0
+    for i in reversed(range(size)):
+        g = rewards[i] + (gamma * g)
+        discounted_return[i] = g
+    return discounted_return
+
+
 class Policy(nn.Module):
     def __init__(self, n_inputs, n_outputs, size=16):
         super().__init__()
@@ -15,17 +25,86 @@ class Policy(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return F.softmax(x, dim=0)
+        return F.softmax(x, dim=-1)
 
 
-def get_return(rewards, gamma=1):
-    size = len(rewards)
-    discounted_return = torch.zeros(size, dtype=torch.float32)
-    g = 0
-    for i in reversed(range(size)):
-        g = rewards[i] + (gamma * g)
-        discounted_return[i] = g
-    return discounted_return
+class Agent:
+    def __init__(self, env, gamma=1, plr=0.03, vlr=0.1, batch_size=100):
+        self.gamma = gamma
+        self.batch_size = batch_size
+        n_inputs = env.observation_space.shape[0]
+        n_outputs = env.action_space.n
+        self.policy = Policy(n_inputs, n_outputs)
+        self.value = Value(n_inputs)
+        self.opts = [
+            optim.Adam(self.policy.parameters(), lr=plr),
+            optim.Adam(self.value.parameters(), lr=vlr),
+        ]
+        self.batch_reset()
+        self.episode_reset()
+
+    def episode_reset(self):
+        self.rewards = []
+
+    def batch_reset(self):
+        self.obs = []
+        self.actions = []
+        self.returns = []
+
+    def step(self, observation, reward=None, is_done=False):
+        observation = torch.tensor(observation, dtype=torch.float32)
+        self.obs.append(observation)
+        if reward != None:
+            self.rewards.append(reward)
+        action = None
+        if not is_done:
+            with torch.no_grad():
+                prob = self.policy(observation)
+            m = Categorical(prob)
+            action = m.sample().item()
+            self.actions.append(action)
+        else:
+            self.update(reward)
+        return action
+
+    def update(self, reward):
+        self.rewards.append(reward)
+        self.returns.extend(self.get_return())
+        if len(self.returns) >= self.batch_size:
+            self.update_weights()
+            self.batch_reset()
+        self.episode_reset()
+
+    def update_weights(self):
+        for opt in self.opts:
+            opt.zero_grad()
+        score = self.calculate_score()
+        score.backward()
+        for opt in self.opts:
+            opt.step()
+
+    def calculate_score(self):
+        obs = torch.stack(self.obs)
+        V = self.get_value(obs)
+        G = torch.stack(self.returns)
+        idxs = torch.tensor(self.actions).view(-1, 1)
+        ps = self.policy(obs)
+        P = ps.gather(1, idxs).view(-1)
+        A = G - V
+        mse = (A ** 2).mean()
+        return (-A.detach() * torch.log(P)).mean() + mse
+
+    def get_value(self, obs):
+        return self.value(obs).view(-1)
+
+    def get_return(self):
+        size = len(self.rewards)
+        discounted_return = torch.zeros(size, dtype=torch.float32)
+        g = 0
+        for i in reversed(range(size)):
+            g = self.rewards[i] + (self.gamma * g)
+            discounted_return[i] = g
+        return discounted_return
 
 
 class MCPG(nn.Module):
@@ -76,6 +155,7 @@ class MCPG(nn.Module):
     def calculate_score(self):
         G = torch.stack(self.returns)
         p = torch.stack(self.probs)
+        print(p)
         return (-G * torch.log(p)).mean()
 
     @property
@@ -134,8 +214,8 @@ class A2C(nn.Module):
         super().__init__()
         n_inputs = env.observation_space.shape[0]
         n_outputs = env.action_space.n
-        self.policy = Policy(n_inputs, n_outputs, size=16)
-        self.value = Value(n_inputs, size=16)
+        self.policy = Policy(n_inputs, n_outputs)
+        self.value = Value(n_inputs)
         self.opt = optim.Adam(self.policy.parameters(), lr=lr)
         self.vopt = optim.Adam(self.value.parameters(), lr=vlr)
         self.gamma = gamma
@@ -168,8 +248,9 @@ class A2C(nn.Module):
         return action
 
     def get_return(self):
+        print("no effect")
         with torch.no_grad():
-            V = self.value(self.obs[-1]).item() * self.gamma ** (self.tdlen + 1)
+            V = self.value(self.obs[-1]).item() * (self.gamma ** (self.tdlen + 1))
         R = self.get_summed_rs()
         return V + R
 
@@ -208,19 +289,4 @@ class A2C(nn.Module):
         advantage = td_returns - values
         mse = (advantage ** 2).mean()
         return (-advantage.detach() * torch.log(p)).mean() + mse
-
-    def calculate_td_values(self, values, rewards):
-        n_iter = values.shape[0]
-        next_values = torch.zeros(n_iter, dtype=torch.float32)
-        for i in range(n_iter):
-            td_idx = i + self.tdlen
-            end_value = (
-                0
-                if td_idx >= n_iter
-                else values[td_idx] * self.gamma ** (self.tdlen + 1)
-            )
-            end_idx = min(td_idx, n_iter)
-            summed_rs = self.get_summed_rs(rewards[i:end_idx])
-            next_values[i] = end_value + summed_rs
-        return next_values
 
