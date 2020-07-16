@@ -11,7 +11,7 @@ all_rewards = []
 for td in [0, 3, 5, 10, 20, 500]:
     for b in range(20):
         # agent = Agent(env)
-        agent = TDAgent(env, td=td)
+        agent = TDAgent(env, gamma=0.99, td=td)
         total_rewards = []
         n_episodes = 100
         for episode in range(n_episodes):

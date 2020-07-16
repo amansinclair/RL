@@ -17,7 +17,7 @@ def get_return(rewards, gamma):
 
 
 class Policy(nn.Module):
-    def __init__(self, n_inputs, n_outputs, size=16):
+    def __init__(self, n_inputs, n_outputs, size=128):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
         self.fc2 = nn.Linear(size, n_outputs)
@@ -29,7 +29,7 @@ class Policy(nn.Module):
 
 
 class Value(nn.Module):
-    def __init__(self, n_inputs, size=16):
+    def __init__(self, n_inputs, size=128):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
         self.fc2 = nn.Linear(size, size)
@@ -148,6 +148,51 @@ class TDAgent(Agent):
         for r in reversed(rewards):
             R = r + (R * self.gamma)
         return R
+
+
+class GAEAgent(Agent):
+    def __init__(self, *args, gae=0.92, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gae = gae
+
+    def batch_reset(self):
+        super().batch_reset()
+        self.ep_start = 0
+
+    def get_return(self):
+        """Use get_return to return Advantage."""
+        end = self.ep_start + len(self.rewards)
+        V = self.get_value(torch.stack(self.obs[self.ep_start : end]))
+        self.ep_start += len(self.rewards)
+        Vstep = V[1:].detach()
+        zero = torch.tensor([0.0])
+        Vstep = torch.cat((Vstep, zero))
+        delta = Vstep - V + torch.tensor(self.rewards)
+        size = len(self.rewards)
+        advantage = torch.zeros(size, dtype=torch.float32)
+        A = 0
+        for i in reversed(range(size)):
+            A = delta[i] + (self.gamma * self.gae * A)
+            advantage[i] = A
+        advantages_2 = []
+        advantage_1 = 0.0
+        next_value = 0.0
+        for r, v in zip(reversed(self.rewards), reversed(V)):
+            td_error = r + next_value * self.gamma - v
+            advantage_1 = td_error + advantage_1 * self.gamma * self.gae
+            next_value = v
+            advantages_2.insert(0, advantage_1)
+        advantages_2 = torch.tensor(advantages_2)
+        return advantages_2
+
+    def calculate_score(self):
+        obs = torch.stack(self.obs)
+        A = torch.stack(self.returns)
+        idxs = torch.tensor(self.actions).view(-1, 1)
+        ps = self.policy(obs)
+        P = ps.gather(1, idxs).view(-1)
+        mse = (A ** 2).mean()
+        return (-A.detach() * torch.log(P)).mean() + mse
 
 
 class MCPG(nn.Module):
