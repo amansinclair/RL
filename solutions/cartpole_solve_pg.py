@@ -9,8 +9,8 @@ env._max_episode_steps = 1000
 fig = plt.figure()
 
 all_rewards = []
-for b in range(1):
-    agent = MCPGBaseline(env, lr=0.03, gamma=0.99)
+for b in range(20):
+    agent = MCPG(env, lr=0.03, gamma=0.99, batch_size=100)
     total_rewards = []
     n_episodes = 100
     for episode in range(n_episodes):
@@ -29,4 +29,4 @@ mean_results = np.mean(np.stack(all_rewards), axis=0)
 plt.plot(mean_results, label=agent.name)
 plt.legend()
 plt.show()
-fig.savefig("mcpgbaseline.png")
+# fig.savefig("mcpgbaseline.png")
