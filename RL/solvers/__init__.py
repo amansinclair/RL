@@ -9,5 +9,6 @@ from .policy_grad import (
     Critic,
     CriticBaseline,
     CriticGAE,
+    CriticTD,
 )
 from .dqn import DQN, DQNReplay

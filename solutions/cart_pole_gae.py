@@ -11,11 +11,11 @@ all_rewards = []
 
 n_inputs = env.observation_space.shape[0]
 n_outputs = env.action_space.n
-for c in (CriticBaseline, CriticGAE):
-    for b in range(60):
+for c in [0.5, 0.8, 0.92, 0.99]:
+    for b in range(20):
         actor = Actor(n_inputs, n_outputs)
         # critic = CriticGAE(n_inputs, gae=0.92)
-        critic = c(n_inputs)
+        critic = CriticGAE(n_inputs, gae=c)
         agent = MCAgent(
             actor, critic, alr=0.03, clr=0.1, batch_size=100, normalize=False
         )
@@ -39,5 +39,5 @@ for c in (CriticBaseline, CriticGAE):
     plt.plot(mean_results, label=str(agent))
 plt.legend()
 plt.show()
-fig.savefig("gae_bl_comp.png")
+fig.savefig("gae_comp.png")
 env.close()

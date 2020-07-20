@@ -157,8 +157,11 @@ class CriticBaseline(Critic):
 
 class CriticTD(CriticBaseline):
     def __init__(self, *args, td=5, **kwargs):
-        super.__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.tdlen = td + 1
+
+    def __str__(self):
+        return self.__class__.__name__ + str(self.tdlen - 1)
 
     def forward(self):
         end = self.tdlen
@@ -166,17 +169,19 @@ class CriticTD(CriticBaseline):
         with torch.no_grad():
             while end < len(self.rewards):
                 r = self.rewards[end - self.tdlen : end]
-                G = self.get_summed_rs(r)
+                R = self.get_summed_rs(r)
                 V = self.value(self.obs[end])
-                returns.append(G + V.item())
+                returns.append(R + V.item())
                 end += 1
-        self.rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
-        end_returns = super().get_return()
+        end_returns = self.get_tail_rewards()
         if returns:
             start_returns = torch.tensor(returns)
-            return torch.cat((start_returns, end_returns))
+            G = torch.cat((start_returns, end_returns))
         else:
-            return end_returns
+            G = end_returns
+        obs = torch.stack(self.obs)
+        V = self.value(obs).view(-1)
+        return G - V
 
     def get_summed_rs(self, rewards):
         R = 0.0
@@ -184,11 +189,20 @@ class CriticTD(CriticBaseline):
             R = r + (R * self.gamma)
         return R
 
+    def get_tail_rewards(self):
+        rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
+        critic = Critic()
+        critic.rewards = rewards
+        return critic()
+
 
 class CriticGAE(CriticBaseline):
     def __init__(self, *args, gae=0.92, **kwargs):
         super().__init__(*args, **kwargs)
         self.gae = gae
+
+    def __str__(self):
+        return self.__class__.__name__ + str(self.gae)
 
     def forward(self):
         obs = torch.stack(self.obs)
