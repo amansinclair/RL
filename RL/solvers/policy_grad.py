@@ -108,6 +108,12 @@ class Actor(nn.Module):
     def get_probs(self):
         return torch.stack(self.probs)
 
+    def get_batch_probs(self, obs):
+        probs = self.policy(obs)
+        m = Categorical(probs)
+        actions = m.sample()
+        return torch.gather(probs, 1, actions.view(-1, 1))
+
 
 class Critic(nn.Module):
     def __init__(self, gamma=0.99):
@@ -133,6 +139,10 @@ class Critic(nn.Module):
             self.rewards.append(reward)
 
     def forward(self):
+        """Call stand_return so that subclasses still have acess to stand_return."""
+        return self.standard_return()
+
+    def standard_return(self):
         size = len(self.rewards)
         G = torch.zeros(size, dtype=torch.float32)
         g = 0
@@ -149,7 +159,7 @@ class CriticBaseline(Critic):
         self.value = Value(n_inputs, size)
 
     def forward(self):
-        G = super().forward()
+        G = self.standard_return()
         obs = torch.stack(self.obs)
         V = self.value(obs).view(-1)
         return G - V
@@ -190,10 +200,8 @@ class CriticTD(CriticBaseline):
         return R
 
     def get_tail_rewards(self):
-        rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
-        critic = Critic()
-        critic.rewards = rewards
-        return critic()
+        self.rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
+        return self.standard_return()
 
 
 class CriticGAE(CriticBaseline):
@@ -220,77 +228,48 @@ class CriticGAE(CriticBaseline):
         return A
 
 
-"""
-class TDAgent(Agent):
-    def __init__(self, *args, td, **kwargs):
+class PPOAgent(MCAgent):
+    def __init__(self, *args, ppo=0.2, n_epochs=5, **kwargs):
         super().__init__(*args, **kwargs)
-        self.tdlen = td + 1
+        self.ppo = 0.2
+        self.n_epochs = n_epochs
 
-    def get_return(self):
-        end = self.tdlen
-        returns = []
-        with torch.no_grad():
-            while end < len(self.rewards):
-                r = self.rewards[end - self.tdlen : end]
-                G = self.get_summed_rs(r)
-                V = self.value(self.obs[end])
-                returns.append(G + V.item())
-                end += 1
-        self.rewards = self.rewards[-min(self.tdlen, len(self.rewards)) :]
-        end_returns = super().get_return()
-        if returns:
-            start_returns = torch.tensor(returns)
-            return torch.cat((start_returns, end_returns))
+    def reset(self):
+        super().reset()
+        self.p = None
+
+    def update(self):
+        self.update_weights()
+
+    def get_loss(self):
+        P = self.actor.get_batch_probs(torch.stack(self.critic.obs))
+        R = self.get_surrogate(P)
+        A = self.critic()
+        if self.normalize:
+            A = (A - A.mean()) / A.std()
+        Aloss = (A ** 2).sum()
+        Pscore = -(A.detach() * R).sum()
+        return Pscore + Aloss
+
+    def get_surrogate(self, P):
+        if self.p != None:
+            R = P / self.p.detach()
         else:
-            return end_returns
+            R = torch.ones(P.shape)
+        self.p = P
+        return self.clip(R)
 
-    def get_summed_rs(self, rewards):
-        R = 0.0
-        for r in reversed(rewards):
-            R = r + (R * self.gamma)
-        return R
+    def update_weights(self):
+        for epoch in range(self.n_epochs):
+            print("epoch", epoch + 1)
+            for opt in self.opts:
+                opt.zero_grad()
+            self.loss = self.get_loss()
+            self.loss.backward()
+            for opt in self.opts:
+                opt.step()
+        self.reset()
 
+    def clip(self, R):
+        return torch.clamp(R, 1 - self.ppo, 1 + self.ppo)
 
-class GAEAgent(Agent):
-    def __init__(self, *args, gae=0.92, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.gae = gae
-
-    def batch_reset(self):
-        super().batch_reset()
-        self.ep_start = 0
-
-    def get_return(self):
-        end = self.ep_start + len(self.rewards)
-        V = self.get_value(torch.stack(self.obs[self.ep_start : end]))
-        self.ep_start += len(self.rewards)
-        Vstep = V[1:].detach()
-        zero = torch.tensor([0.0])
-        Vstep = torch.cat((Vstep, zero))
-        delta = Vstep - V + torch.tensor(self.rewards)
-        size = len(self.rewards)
-        advantage = torch.zeros(size, dtype=torch.float32)
-        A = 0
-        for i in reversed(range(size)):
-            A = delta[i] + (self.gamma * self.gae * A)
-            advantage[i] = A
-        advantages_2 = []
-        advantage_1 = 0.0
-        next_value = 0.0
-        for r, v in zip(reversed(self.rewards), reversed(V)):
-            td_error = r + next_value * self.gamma - v
-            advantage_1 = td_error + advantage_1 * self.gamma * self.gae
-            next_value = v
-            advantages_2.insert(0, advantage_1)
-        advantages_2 = torch.tensor(advantages_2)
-        return advantages_2
-
-    def calculate_score(self):
-        obs = torch.stack(self.obs)
-        A = torch.stack(self.returns)
-        idxs = torch.tensor(self.actions).view(-1, 1)
-        ps = self.policy(obs)
-        P = ps.gather(1, idxs).view(-1)
-        mse = (A ** 2).mean()
-        return (-A.detach() * torch.log(P)).mean() + mse
-"""

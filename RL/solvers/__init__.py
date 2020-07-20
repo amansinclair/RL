@@ -10,5 +10,6 @@ from .policy_grad import (
     CriticBaseline,
     CriticGAE,
     CriticTD,
+    PPOAgent,
 )
 from .dqn import DQN, DQNReplay
