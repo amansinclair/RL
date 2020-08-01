@@ -11,5 +11,7 @@ from .policy_grad import (
     CriticGAE,
     CriticTD,
     PPOAgent,
+    PPOActor,
 )
 from .dqn import DQN, DQNReplay
+from .cem import CEMAgent
