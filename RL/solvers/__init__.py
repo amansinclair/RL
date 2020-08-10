@@ -15,3 +15,4 @@ from .policy_grad import (
 )
 from .dqn import DQN, DQNReplay
 from .sel import SelAgent
+from .cem import train
