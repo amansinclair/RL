@@ -14,4 +14,4 @@ from .policy_grad import (
     PPOActor,
 )
 from .dqn import DQN, DQNReplay
-from .cem import CEMAgent
+from .sel import SelAgent

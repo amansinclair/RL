@@ -26,7 +26,7 @@ class Policy(nn.Module):
             return m.sample().item()
 
 
-class CEMAgent:
+class SelAgent:
     def __init__(self, env, gamma=0.99, lr=0.01, batch_size=256):
         self.n_inputs = env.observation_space.shape[0]
         self.n_outputs = env.action_space.n
