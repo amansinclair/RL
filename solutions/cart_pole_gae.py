@@ -1,43 +1,21 @@
 import gym
 import matplotlib.pyplot as plt
-from RL.solvers import MCAgent, Actor, CriticBaseline, CriticGAE
+from RL.solvers import MCAgent, Actor, CriticGAE
+from RL.utils import training_loop, get_env_size, plot_means
 import numpy as np
-import torch.nn as nn
 
-env = gym.make("CartPole-v1")
-env._max_episode_steps = 1000
-fig = plt.figure()
-all_rewards = []
+env_name = "CartPole-v1"
+n_inputs, n_outputs = get_env_size(env_name)
 
-n_inputs = env.observation_space.shape[0]
-n_outputs = env.action_space.n
-for c in [0.5, 0.8, 0.92, 0.99]:
-    for b in range(20):
-        actor = Actor(n_inputs, n_outputs)
-        # critic = CriticGAE(n_inputs, gae=0.92)
-        critic = CriticGAE(n_inputs, gae=c)
-        agent = MCAgent(
-            actor, critic, alr=0.03, clr=0.1, batch_size=100, normalize=False
-        )
-        total_rewards = []
-        n_episodes = 120
-        for episode in range(n_episodes):
-            observation = env.reset()
-            done = False
-            reward = None
-            rewards = []
-            while not done:
-                action = agent.step(observation, reward)
-                observation, reward, done, info = env.step(action)
-                rewards.append(reward)
-            agent.step(observation, reward, done)
-            total_reward = sum(rewards)
-            total_rewards.append(total_reward)
-            print(episode + 1, total_reward)
-        all_rewards.append(total_rewards)
-    mean_results = np.mean(np.stack(all_rewards), axis=0)
-    plt.plot(mean_results, label=str(agent))
-plt.legend()
-plt.show()
-fig.savefig("gae_comp.png")
-env.close()
+
+def get_agent():
+    actor = Actor(n_inputs, n_outputs, size=32)
+    critic = CriticGAE(n_inputs, size=32, gamma=0.99, gae=0.96)
+    batch_size = 10
+    agent = MCAgent(actor, critic, batch_size=batch_size, alr=0.01)
+    return agent
+
+
+results = training_loop(env_name, get_agent, n_episodes=100, n_repeats=5)
+plot_means(results)
+
