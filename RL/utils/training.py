@@ -1,5 +1,6 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def get_env_size(env_name):
@@ -36,3 +37,14 @@ def training_loop(env_name, agent_func, n_repeats=1, n_episodes=200, max_steps=1
     env.close()
     # mean_results = np.mean(np.stack(all_scores), axis=0)
     return all_scores
+
+
+def plot_means(results, show_std=True):
+    m = np.mean(results, axis=0)
+    plt.plot(m)
+    if show_std:
+        std = np.std(results, axis=0)
+        plt.fill_between(
+            np.arange(len(m)), m - std, m + std, alpha=0.2, interpolate=True
+        )
+    plt.show()
