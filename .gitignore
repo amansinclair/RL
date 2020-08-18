@@ -4,4 +4,4 @@
 *.egg
 *.egg-info/
 *.tmp
-.solutions/shit.py
+*.npy

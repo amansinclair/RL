@@ -16,6 +16,7 @@ def get_agent():
     return agent
 
 
-results = training_loop(env_name, get_agent, n_episodes=100, n_repeats=5)
+results = training_loop(env_name, get_agent, n_episodes=100, n_repeats=50)
 plot_means(results)
+np.save("cartpole_gae_96_bs_20_lr_01.npy", results)
 
