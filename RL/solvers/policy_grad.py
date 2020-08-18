@@ -50,7 +50,7 @@ class MCAgent:
     def __str__(self):
         return str(self.critic)
 
-    def step(self, obs, reward=None, is_done=False):
+    def act(self, obs, reward=None, is_done=False):
         obs = torch.tensor(obs, dtype=torch.float32)
         self.critic.store(obs, reward, is_done)
         if is_done:
@@ -59,7 +59,7 @@ class MCAgent:
             self.critic.reset()
             action = None
         else:
-            action = self.actor(obs)
+            action = self.actor.get_action(obs)
         return action
 
     def update(self):
@@ -70,12 +70,19 @@ class MCAgent:
 
     def get_loss(self):
         P = self.actor.get_probs()
-        A = self.critic()
+        G = self.critic.get_return()
+        Vloss = 0
+        A = G
         if self.normalize:
-            A = (A - A.mean()) / A.std()
-        Aloss = (A ** 2).sum()
+            G = (G - G.mean()) / G.std()
+        if self.critic.has_params:
+            A = self.critic.get_advantage()
+            V = self.critic.get_value()
+            Vloss = ((G - V) ** 2).sum()
+            if self.normalize:
+                A = (A - A.mean()) / A.std()
         Pscore = -(A.detach() * torch.log(P)).sum()
-        return Pscore + Aloss
+        return Pscore + Vloss
 
     def update_weights(self):
         for opt in self.opts:
@@ -98,7 +105,7 @@ class Actor(nn.Module):
     def __len__(self):
         return len(self.probs)
 
-    def forward(self, obs):
+    def get_action(self, obs):
         prob = self.policy(obs)
         m = Categorical(prob)
         action = m.sample().item()
@@ -138,18 +145,22 @@ class Critic(nn.Module):
         if reward:
             self.rewards.append(reward)
 
-    def forward(self):
-        """Call stand_return so that subclasses still have acess to stand_return."""
-        return self.standard_return()
-
-    def standard_return(self):
+    def get_return(self):
         size = len(self.rewards)
         G = torch.zeros(size, dtype=torch.float32)
-        g = 0
+        g = 0.0
         for i in reversed(range(size)):
             g = self.rewards[i] + (self.gamma * g)
             G[i] = g
         return G
+
+    def get_advantage(self):
+        """Implemented by subclasses."""
+        pass
+
+    def get_value(self):
+        """Implemented by subclasses."""
+        pass
 
 
 class CriticBaseline(Critic):
@@ -158,11 +169,15 @@ class CriticBaseline(Critic):
         self.has_params = True
         self.value = Value(n_inputs, size)
 
-    def forward(self):
-        G = self.standard_return()
+    def get_advantage(self):
+        G = self.get_return()
+        V = self.get_value().detach()
+        return G - V
+
+    def get_value(self):
         obs = torch.stack(self.obs)
         V = self.value(obs).view(-1)
-        return G - V
+        return V
 
 
 class CriticTD(CriticBaseline):
@@ -212,12 +227,11 @@ class CriticGAE(CriticBaseline):
     def __str__(self):
         return self.__class__.__name__ + str(self.gae)
 
-    def forward(self):
-        obs = torch.stack(self.obs)
-        V = self.value(obs).view(-1)
+    def get_advantage(self):
+        V = self.get_value().detach()
         size = len(V)
         next_V = torch.zeros(size)
-        next_V[:-1] = V[1:]  # .detach()
+        next_V[:-1] = V[1:]
         R = torch.tensor(self.rewards)
         td_error = R + (self.gamma * next_V) - V
         A = torch.zeros(size)
