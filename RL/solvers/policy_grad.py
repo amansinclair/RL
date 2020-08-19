@@ -71,10 +71,10 @@ class MCAgent:
     def get_loss(self):
         P = self.actor.get_probs()
         G = self.critic.get_return()
-        Vloss = 0
-        A = G
         if self.normalize:
             G = (G - G.mean()) / G.std()
+        A = G
+        Vloss = 0
         if self.critic.has_params:
             A = self.critic.get_advantage()
             V = self.critic.get_value()
@@ -255,25 +255,6 @@ class PPOAgent(MCAgent):
     def update(self):
         self.update_weights()
 
-    def get_loss(self):
-        P = self.actor.get_batch_probs(torch.stack(self.critic.obs))
-        R = self.get_surrogate(P)
-        clipped_R = self.clip(R)
-        A = self.critic()
-        if self.normalize:
-            A = (A - A.mean()) / A.std()
-        Aloss = (A ** 2).sum()
-        Pscore = -(torch.min(A.detach() * R, A.detach() * clipped_R)).sum()
-        return Pscore + Aloss
-
-    def get_surrogate(self, P):
-        if self.p != None:
-            R = P / self.p.detach()
-        else:
-            R = torch.ones(P.shape)
-        self.p = P
-        return R
-
     def update_weights(self):
         for epoch in range(self.n_epochs):
             for opt in self.opts:
@@ -284,8 +265,34 @@ class PPOAgent(MCAgent):
                 opt.step()
         self.reset()
 
+    def get_loss(self):
+        P = self.actor.get_batch_probs(torch.stack(self.critic.obs))
+        R = self.get_surrogate(P)
+        clipped_R = self.clip(R)
+        G = self.critic.get_return()
+        if self.normalize:
+            G = (G - G.mean()) / G.std()
+        Vloss = 0
+        A = G
+        if self.critic.has_params:
+            A = self.critic.get_advantage()
+            V = self.critic.get_value()
+            Vloss = ((G - V) ** 2).sum()
+            if self.normalize:
+                A = (A - A.mean()) / A.std()
+        Pscore = -(torch.min(A * R, A * clipped_R)).sum()
+        return Pscore + Vloss
+
+    def get_surrogate(self, P):
+        if self.p != None:
+            R = P / self.p.detach()
+        else:
+            R = torch.ones(P.shape)
+            self.p = P
+        return R
+
     def clip(self, R):
-        return torch.clamp(R, 1.0 - self.ppo, 1.0 + self.ppo)
+        return torch.clamp(R, min=1.0 - self.ppo, max=1.0 + self.ppo)
 
 
 class PPOActor(nn.Module):
@@ -300,11 +307,12 @@ class PPOActor(nn.Module):
     def __len__(self):
         return len(self.probs)
 
-    def forward(self, obs):
-        prob = self.policy(obs)
-        m = Categorical(prob)
-        action = m.sample().item()
-        self.actions.append(action)
+    def get_action(self, obs):
+        with torch.no_grad():
+            prob = self.policy(obs)
+            m = Categorical(prob)
+            action = m.sample().item()
+            self.actions.append(action)
         return action
 
     def get_batch_probs(self, obs):
