@@ -81,7 +81,7 @@ class MCAgent:
             Vloss = ((G - V) ** 2).sum()
             if self.normalize:
                 A = (A - A.mean()) / A.std()
-        Pscore = -(A.detach() * torch.log(P)).sum()
+        Pscore = -(A * torch.log(P)).sum()
         return Pscore + Vloss
 
     def update_weights(self):
@@ -284,11 +284,9 @@ class PPOAgent(MCAgent):
         return Pscore + Vloss
 
     def get_surrogate(self, P):
-        if self.p != None:
-            R = P / self.p.detach()
-        else:
-            R = torch.ones(P.shape)
-            self.p = P
+        if self.p == None:
+            self.p = P.detach()
+        R = P / self.p
         return R
 
     def clip(self, R):
@@ -317,4 +315,4 @@ class PPOActor(nn.Module):
 
     def get_batch_probs(self, obs):
         probs = self.policy(obs)
-        return torch.gather(probs, 1, torch.tensor(self.actions).view(-1, 1))
+        return torch.gather(probs, 1, torch.tensor(self.actions).view(-1, 1)).squeeze()

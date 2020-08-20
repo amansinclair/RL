@@ -11,9 +11,13 @@ def get_env_size(env_name):
     return n_inputs, n_outputs
 
 
-def training_loop(env_name, agent_func, n_repeats=1, n_episodes=200, max_steps=1000):
+def training_loop(
+    env_name, agent_func, n_repeats=1, n_episodes=200, max_steps=1000, seed=1337
+):
     env = gym.make(env_name)
+    env.seed(seed)
     env._max_episode_steps = max_steps
+    np.random.seed(seed)
     all_scores = []
     for repeat in range(n_repeats):
         print(f" ### Repeat {repeat + 1} of {n_repeats} ###")
@@ -35,7 +39,6 @@ def training_loop(env_name, agent_func, n_repeats=1, n_episodes=200, max_steps=1
             print(episode + 1, episode_score)
         all_scores.append(episode_scores)
     env.close()
-    # mean_results = np.mean(np.stack(all_scores), axis=0)
     return all_scores
 
 

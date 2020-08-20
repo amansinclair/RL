@@ -12,12 +12,12 @@ def get_agent():
     actor = Actor(n_inputs, n_outputs, size=32)
     critic = CriticBaseline(n_inputs, size=32, gamma=0.99)
     # critic = Critic()
-    batch_size = 50
-    agent = MCAgent(actor, critic, batch_size=batch_size, alr=0.02)
+    batch_size = 8
+    agent = MCAgent(actor, critic, batch_size=batch_size, alr=0.03)
     return agent
 
 
-results = training_loop(env_name, get_agent, n_episodes=100, n_repeats=50)
+results = training_loop(env_name, get_agent, n_episodes=60, n_repeats=5)
 plot_means(results)
-np.save("cartpole_baseline_bs_50_lr_02.npy", results)
+# np.save("cartpole_baseline_bs_50_lr_02.npy", results)
 
