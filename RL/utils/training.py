@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 def get_env_size(env_name):
-    env = gym.make("CartPole-v1")
+    env = gym.make(env_name)
     n_inputs = env.observation_space.shape[0]
     n_outputs = env.action_space.n
     env.close()
@@ -12,7 +12,13 @@ def get_env_size(env_name):
 
 
 def training_loop(
-    env_name, agent_func, n_repeats=1, n_episodes=200, max_steps=1000, seed=1337
+    env_name,
+    agent_func,
+    n_repeats=1,
+    n_episodes=200,
+    render=False,
+    max_steps=1000,
+    seed=1337,
 ):
     env = gym.make(env_name)
     env.seed(seed)
@@ -30,6 +36,8 @@ def training_loop(
             reward = None
             episode_rewards = []
             while not done:
+                if render:
+                    env.render()
                 action = agent.act(observation, reward, done)
                 observation, reward, done, info = env.step(action)
                 episode_rewards.append(reward)
