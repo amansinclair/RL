@@ -3,7 +3,7 @@ from .mc import MCOnPolicy, MCGrad
 from .qlearn import QLearn
 from .sarsa import Sarsa, NStepSarsa, SemiGradSarsa
 from .td import TDV, TDGrad
-from .policy_grad import (
+from .mcpg import (
     MCAgent,
     Actor,
     Critic,
