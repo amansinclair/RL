@@ -13,6 +13,7 @@ from .mcpg import (
     PPOAgent,
     PPOActor,
 )
+from .pg import Actor, Critic, Model
 from .dqn import DQN, DQNReplay
 from .sel import SelAgent
 from .cem import train
