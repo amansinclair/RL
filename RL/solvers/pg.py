@@ -31,11 +31,11 @@ class Policy(nn.Module):
 
 
 class Value(nn.Module):
-    def __init__(self, n_inputs, size=32):
+    def __init__(self, n_inputs, n_outputs=1, size=32):
         super().__init__()
         self.fc1 = nn.Linear(n_inputs, size)
         self.fc2 = nn.Linear(size, size)
-        self.fc3 = nn.Linear(size, 1)
+        self.fc3 = nn.Linear(size, n_outputs)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -62,19 +62,19 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, n_inputs, size=32):
         super().__init__()
-        self.value = Value(n_inputs, size)
+        self.value = Value(n_inputs, 1, size)
 
     def get_values(self, obs):
         return self.value(obs).view(-1)
 
 
 class Rewarder(nn.Module):
-    def __init__(self, n_inputs, size=32):
+    def __init__(self, n_inputs, n_outputs=1, size=32):
         super().__init__()
-        self.target = Value(n_inputs, size)
+        self.target = Value(n_inputs, n_outputs, size)
         for parameter in self.target.parameters():
             parameter.requires_grad = False
-        self.pred = Value(n_inputs, size)
+        self.pred = Value(n_inputs, n_outputs, size // 2)
 
     def forward(self, obs):
         targets = self.target(obs)
@@ -82,7 +82,7 @@ class Rewarder(nn.Module):
         return (preds - targets) ** 2
 
     def get_reward(self, obs):
-        reward = self(obs).item().detach()
+        reward = self(obs).detach().sum().item()
         return reward
 
 
@@ -91,10 +91,10 @@ class Model:
         self,
         actor,
         critic,
-        rewarder="",
+        rewarder,
         policy_lr=0.01,
         critic_lr=0.1,
-        rewarder_lr=0.01,
+        rewarder_lr=0.1,
         rollout_length=10,
         n_rollouts=5,
         discount_rate_e=0.99,
@@ -108,7 +108,7 @@ class Model:
         self.rewarder = rewarder
         self.actor_opt = optim.Adam(self.actor.parameters(), lr=policy_lr)
         self.critic_opt = optim.Adam(self.critic.parameters(), lr=critic_lr)
-        # self.reward_opt = optim.Adam(self.rewarder.parameters(), lr=rewarder_lr)
+        self.rewarder_opt = optim.Adam(self.rewarder.parameters(), lr=rewarder_lr)
         self.rollout_length = rollout_length
         self.n_rollouts = n_rollouts
         self.discount_rate_e = discount_rate_e
@@ -140,7 +140,7 @@ class Model:
                 self.reset()
         if not is_done:
             action = self.actor.act(obs)
-            intr_reward = self.rewarder.get_reward()
+            intr_reward = self.rewarder.get_reward(obs)
             self.current_rollout.intr_rewards.append(intr_reward)
             self.current_rollout.obs.append(obs)
             self.current_rollout.actions.append(action)
@@ -150,10 +150,14 @@ class Model:
         Aes, Te = self.get_advantages_targets()
         all_obs = self.stack_obs()
         Ve = self.critic.get_values(all_obs)
-        Vloss = ((Ve - Te) ** 2).sum()
+        Veloss = ((Ve - Te) ** 2).mean()
+        Viloss = self.rewarder(all_obs).mean()
         self.critic_opt.zero_grad()
-        Vloss.backward()
+        self.rewarder_opt.zero_grad()
+        Veloss.backward()
+        Viloss.backward()
         self.critic_opt.step()
+        self.rewarder_opt.step()
         actions = self.stack_actions()
         old_probs = self.actor.get_probs(all_obs, actions).detach()
         for epoch in range(self.ppo_epochs):
@@ -163,7 +167,7 @@ class Model:
             clipped_prob_ratio = torch.clamp(
                 prob_ratio, min=1.0 - self.ppo_clip, max=1.0 + self.ppo_clip
             )
-            Pscore = -(torch.min(Aes * prob_ratio, Aes * clipped_prob_ratio)).sum()
+            Pscore = -(torch.min(Aes * prob_ratio, Aes * clipped_prob_ratio)).mean()
             Pscore.backward()
             self.actor_opt.step()
 
@@ -176,7 +180,7 @@ class Model:
                 Ve_next = self.critic.get_values(torch.stack(rollout.next_obs))
                 mask = torch.tensor(rollout.is_not_dones, dtype=torch.float32)
                 Ve_next = Ve_next * mask
-                Re = torch.tensor(rollout.rewards)
+                Re = torch.tensor(rollout.rewards) + torch.tensor(rollout.intr_rewards)
                 td_error_e = Re + (self.discount_rate_e * Ve_next) - Ve
                 size = len(Ve)
                 Ae = torch.zeros(size)
