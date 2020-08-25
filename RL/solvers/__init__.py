@@ -5,15 +5,15 @@ from .sarsa import Sarsa, NStepSarsa, SemiGradSarsa
 from .td import TDV, TDGrad
 from .mcpg import (
     MCAgent,
-    Actor,
-    Critic,
-    CriticBaseline,
-    CriticGAE,
-    CriticTD,
-    PPOAgent,
-    PPOActor,
+    MCActor,
+    MCCritic,
+    MCCriticBaseline,
+    MCCriticGAE,
+    MCCriticTD,
+    MCPPOAgent,
+    MCPPOActor,
 )
-from .pg import Actor, Critic, Model
+from .pg import Actor, Critic, Model, Rewarder
 from .dqn import DQN, DQNReplay
 from .sel import SelAgent
 from .cem import train

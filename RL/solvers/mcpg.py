@@ -93,7 +93,7 @@ class MCAgent:
         self.reset()
 
 
-class Actor(nn.Module):
+class MCActor(nn.Module):
     def __init__(self, n_inputs, n_outputs, size=32):
         super().__init__()
         self.policy = Policy(n_inputs, n_outputs, size)
@@ -122,7 +122,7 @@ class Actor(nn.Module):
         return torch.gather(probs, 1, actions.view(-1, 1))
 
 
-class Critic(nn.Module):
+class MCCritic(nn.Module):
     def __init__(self, gamma=0.99):
         super().__init__()
         self.gamma = gamma
@@ -163,7 +163,7 @@ class Critic(nn.Module):
         pass
 
 
-class CriticBaseline(Critic):
+class MCCriticBaseline(MCCritic):
     def __init__(self, n_inputs, size=32, **kwargs):
         super().__init__(**kwargs)
         self.has_params = True
@@ -180,7 +180,7 @@ class CriticBaseline(Critic):
         return V
 
 
-class CriticTD(CriticBaseline):
+class MCCriticTD(MCCriticBaseline):
     def __init__(self, *args, td=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.tdlen = td + 1
@@ -219,7 +219,7 @@ class CriticTD(CriticBaseline):
         return self.standard_return()
 
 
-class CriticGAE(CriticBaseline):
+class MCCriticGAE(MCCriticBaseline):
     def __init__(self, *args, gae=0.92, **kwargs):
         super().__init__(*args, **kwargs)
         self.gae = gae
@@ -242,7 +242,7 @@ class CriticGAE(CriticBaseline):
         return A
 
 
-class PPOAgent(MCAgent):
+class MCPPOAgent(MCAgent):
     def __init__(self, *args, ppo=0.2, n_epochs=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.ppo = 0.2
@@ -293,7 +293,7 @@ class PPOAgent(MCAgent):
         return torch.clamp(R, min=1.0 - self.ppo, max=1.0 + self.ppo)
 
 
-class PPOActor(nn.Module):
+class MCPPOActor(nn.Module):
     def __init__(self, n_inputs, n_outputs, size=32):
         super().__init__()
         self.policy = Policy(n_inputs, n_outputs, size)

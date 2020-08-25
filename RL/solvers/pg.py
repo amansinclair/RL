@@ -68,6 +68,24 @@ class Critic(nn.Module):
         return self.value(obs).view(-1)
 
 
+class Rewarder(nn.Module):
+    def __init__(self, n_inputs, size=32):
+        super().__init__()
+        self.target = Value(n_inputs, size)
+        for parameter in self.target.parameters():
+            parameter.requires_grad = False
+        self.pred = Value(n_inputs, size)
+
+    def forward(self, obs):
+        targets = self.target(obs)
+        preds = self.pred(obs)
+        return (preds - targets) ** 2
+
+    def get_reward(self, obs):
+        reward = self(obs).item().detach()
+        return reward
+
+
 class Model:
     def __init__(
         self,
@@ -122,8 +140,8 @@ class Model:
                 self.reset()
         if not is_done:
             action = self.actor.act(obs)
-            # intr_reward = self.rewarder.get_reward()
-            # self.current_rollout.intr_rewards.append(intr_reward)
+            intr_reward = self.rewarder.get_reward()
+            self.current_rollout.intr_rewards.append(intr_reward)
             self.current_rollout.obs.append(obs)
             self.current_rollout.actions.append(action)
         return action
