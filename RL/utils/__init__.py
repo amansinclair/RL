@@ -1,3 +1,3 @@
 from .tiling import UniformTiling
-from .training import training_loop, get_env_size, plot_means
+from .training import run, run_episode, evaluate, EnvManager, get_env_size, plot_means
 

@@ -1,7 +1,7 @@
 import gym
 import matplotlib.pyplot as plt
 from RL.solvers import Actor, Critic, Model, Rewarder
-from RL.utils import training_loop, get_env_size, plot_means
+from RL.utils import run, run_episode, EnvManager, get_env_size, plot_means, evaluate
 import numpy as np
 
 env_name = "MountainCar-v0"  # "LunarLander-v2"  # "MountainCar-v0"  # "CartPole-v1"
@@ -18,8 +18,15 @@ def get_agent():
     return agent
 
 
-results = training_loop(
-    env_name, get_agent, render=False, n_episodes=500, n_repeats=1, max_steps=200,
-)
+agent = get_agent()
+
+with EnvManager(env_name, max_steps=200) as env:
+    results = run(env, agent, render=False, n_episodes=5)
+
+with EnvManager(env_name, max_steps=200) as env:
+    results = evaluate(env, get_agent, render=False, n_repeats=3, n_episodes=5)
+
+with EnvManager(env_name, max_steps=200) as env:
+    run_episode(env, agent, render=True)
 plot_means(results)
 

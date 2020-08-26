@@ -42,9 +42,9 @@ def run_episode(env, agent, render=False):
 
 def run(env, agent, n_episodes=200, render=False):
     episode_scores = []
-    print(f"####### Training Environment {env}, episodes {n_epsiodes} #######")
+    print(f"####### Training Environment {env}, episodes {n_episodes} #######")
     for episode in range(n_episodes):
-        episode_score = train_episode(env, agent, render)
+        episode_score = run_episode(env, agent, render)
         episode_scores.append(episode_score)
         print("Episode:", episode + 1, "Score:", episode_score)
     return episode_scores
@@ -64,7 +64,10 @@ def evaluate(env, agent_func, n_repeats=1, n_episodes=200, render=False):
 
 
 def plot_means(results, show_std=True):
-    m = np.mean(results, axis=0)
+    if isinstance(results[0], list):
+        m = np.mean(results, axis=0)
+    else:
+        m = results
     plt.plot(m)
     if show_std:
         std = np.std(results, axis=0)
