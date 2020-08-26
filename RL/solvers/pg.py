@@ -180,7 +180,9 @@ class Model:
                 Ve_next = self.critic.get_values(torch.stack(rollout.next_obs))
                 mask = torch.tensor(rollout.is_not_dones, dtype=torch.float32)
                 Ve_next = Ve_next * mask
-                Re = torch.tensor(rollout.rewards) + torch.tensor(rollout.intr_rewards)
+                Re = torch.tensor(
+                    rollout.intr_rewards
+                )  # + torch.tensor(rollout.rewards)
                 td_error_e = Re + (self.discount_rate_e * Ve_next) - Ve
                 size = len(Ve)
                 Ae = torch.zeros(size)
