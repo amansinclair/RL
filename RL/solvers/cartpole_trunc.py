@@ -11,9 +11,16 @@ n_inputs, n_outputs = get_env_size(env_name)
 def get_agent():
     actor = Actor(n_inputs, n_outputs, size=32)
     critic = Critic(n_inputs, size=32)
-    rewarder = Rewarder(n_inputs, size=2)
+    rewarder = Rewarder(n_inputs, n_outputs=1, size=8)
     agent = Model(
-        actor, critic, rewarder, rollout_length=10, n_rollouts=1, rewarder_lr=0.1
+        actor,
+        critic,
+        rewarder,
+        rollout_length=200,
+        n_rollouts=1,
+        policy_lr=0.1,
+        critic_lr=0.1,
+        rewarder_lr=0.01,
     )
     return agent
 
@@ -21,12 +28,14 @@ def get_agent():
 agent = get_agent()
 
 with EnvManager(env_name, max_steps=200) as env:
-    results = run(env, agent, render=False, n_episodes=5)
+    results = run(env, agent, render=True, n_episodes=20)
+"""
+with EnvManager(env_name, max_steps=1000) as env:
+    results = evaluate(env, get_agent, render=False, n_episodes=60, n_repeats=10)
 
-with EnvManager(env_name, max_steps=200) as env:
-    results = evaluate(env, get_agent, render=False, n_repeats=3, n_episodes=5)
 
 with EnvManager(env_name, max_steps=200) as env:
     run_episode(env, agent, render=True)
-plot_means(results)
 
+plot_means(results)
+"""

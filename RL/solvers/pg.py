@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from ..utils import Norm, StdNorm
 
 
 class RollOut:
@@ -58,6 +59,11 @@ class Actor(nn.Module):
         probs = self.policy(obs)
         return torch.gather(probs, 1, actions).squeeze()
 
+    def get_entropy(self, obs):
+        probs = self.policy(obs)
+        m = Categorical(probs)
+        return m.entropy()
+
 
 class Critic(nn.Module):
     def __init__(self, n_inputs, size=32):
@@ -74,12 +80,12 @@ class Rewarder(nn.Module):
         self.target = Value(n_inputs, n_outputs, size)
         for parameter in self.target.parameters():
             parameter.requires_grad = False
-        self.pred = Value(n_inputs, n_outputs, size // 2)
+        self.pred = Value(n_inputs, n_outputs, size)
 
     def forward(self, obs):
         targets = self.target(obs)
         preds = self.pred(obs)
-        return (preds - targets) ** 2
+        return ((preds - targets) ** 2).squeeze()
 
     def get_reward(self, obs):
         reward = self(obs).detach().sum().item()
@@ -99,9 +105,12 @@ class Model:
         n_rollouts=5,
         discount_rate_e=0.99,
         discount_rate_i=0.99,
-        gae_decay=0.99,
+        gae_decay=0.95,
         ppo_clip=0.2,
         ppo_epochs=5,
+        ent_coef=0.001,
+        norm_obs=True,
+        norm_ir=True,
     ):
         self.actor = actor
         self.critic = critic
@@ -116,6 +125,13 @@ class Model:
         self.gae_decay = gae_decay
         self.ppo_clip = ppo_clip
         self.ppo_epochs = ppo_epochs
+        self.ent_coef = ent_coef
+        self.norm_obs = norm_obs
+        if norm_obs:
+            self.obs_normer = Norm()
+        self.norm_ir = norm_ir
+        if norm_ir:
+            self.ir_normer = StdNorm()
         self.reset()
 
     def reset(self):
@@ -133,25 +149,35 @@ class Model:
             self.current_rollout.rewards.append(reward)
             self.current_rollout.next_obs.append(obs)
             self.current_rollout.is_not_dones.append(not (is_done))
+            if self.norm_obs and self.obs_normer:
+                nobs = self.obs_normer.normalize(obs)
+            else:
+                nobs = obs
+            intr_reward = self.rewarder.get_reward(nobs)
+            self.current_rollout.intr_rewards.append(intr_reward)
         if len(self.current_rollout) == self.rollout_length or is_done:
+            if self.norm_ir:
+                self.ir_normer.update(torch.tensor(self.current_rollout.intr_rewards))
             self.add_new_rollout()
             if len(self.rollouts) == self.n_rollouts:
                 self.update()
                 self.reset()
         if not is_done:
             action = self.actor.act(obs)
-            intr_reward = self.rewarder.get_reward(obs)
-            self.current_rollout.intr_rewards.append(intr_reward)
             self.current_rollout.obs.append(obs)
             self.current_rollout.actions.append(action)
         return action
 
     def update(self):
-        Aes, Te = self.get_advantages_targets()
         all_obs = self.stack_obs()
+        if self.norm_obs and self.obs_normer:
+            norm_obs = self.obs_normer.normalize(all_obs)
+        else:
+            norm_obs = all_obs
+        Aes, Te = self.get_advantages_targets()
         Ve = self.critic.get_values(all_obs)
         Veloss = ((Ve - Te) ** 2).mean()
-        Viloss = self.rewarder(all_obs).mean()
+        Viloss = self.rewarder(norm_obs).mean()
         self.critic_opt.zero_grad()
         self.rewarder_opt.zero_grad()
         Veloss.backward()
@@ -163,13 +189,18 @@ class Model:
         for epoch in range(self.ppo_epochs):
             self.actor_opt.zero_grad()
             probs = self.actor.get_probs(all_obs, actions)
+            entropy = 0  # self.actor.get_entropy(all_obs).mean()
             prob_ratio = probs / old_probs
             clipped_prob_ratio = torch.clamp(
                 prob_ratio, min=1.0 - self.ppo_clip, max=1.0 + self.ppo_clip
             )
-            Pscore = -(torch.min(Aes * prob_ratio, Aes * clipped_prob_ratio)).mean()
+            Pscore = -(torch.min(Aes * prob_ratio, Aes * clipped_prob_ratio)).mean() - (
+                self.ent_coef * entropy
+            )
             Pscore.backward()
             self.actor_opt.step()
+        if self.norm_obs:
+            self.obs_normer.update(all_obs)
 
     def get_advantages_targets(self):
         Aes = []
@@ -180,9 +211,10 @@ class Model:
                 Ve_next = self.critic.get_values(torch.stack(rollout.next_obs))
                 mask = torch.tensor(rollout.is_not_dones, dtype=torch.float32)
                 Ve_next = Ve_next * mask
-                Re = torch.tensor(
-                    rollout.intr_rewards
-                )  # + torch.tensor(rollout.rewards)
+                Re = torch.tensor(rollout.intr_rewards)
+                if self.norm_ir and self.ir_normer:
+                    Re = self.ir_normer.normalize(Re)
+                # Re += torch.tensor(rollout.rewards)
                 td_error_e = Re + (self.discount_rate_e * Ve_next) - Ve
                 size = len(Ve)
                 Ae = torch.zeros(size)
@@ -207,36 +239,3 @@ class Model:
         for rollout in self.rollouts:
             acts += rollout.actions
         return torch.tensor(acts).view(-1, 1)
-
-
-"""    def get_advantages_targets(self):
-        Aes = []
-        Ais = []
-        with torch.no_grad():
-            for rollout in self.rollouts:
-                Ve, Vi = self.critic.get_value(rollout.states)
-                Ve_next, Vi_next = self.critic.get_values(rollout.next_states)
-                mask = torch.tensor(rollout.is_not_dones, dtype=torch.float32)
-                Ve_next = Ve_next * mask
-                Vi_next = Vi_next * mask
-                Re = torch.tensor(rollout.rewards)
-                Ri = torch.tensor(rollout.intr_rewards)
-                td_error_e = Re + (self.discount_rate_e * Ve_next) - Ve
-                td_error_i = Ri + (self.discount_rate_i * Vi_next) - Vi
-                size = len(Ve)
-                Ae = torch.zeros(size)
-                Ai = torch.zeros(size)
-                a_e = 0
-                a_i = 0
-                for i in reversed(range(size)):
-                    a_e = td_error_e[i] + (self.discount_rate_e * self.gae_decay * a_e)
-                    a_i = td_error_i[i] + (self.discount_rate_i * self.gae_decay * a_i)
-                    Ae[i] = a_e
-                    Ai[i] = a_i
-                Aes.append(Ae)
-                Ais.append(Ai)
-        Aes = torch.cat(Aes)
-        Ais = torch.cat(Ais)
-        return Aes, Ais, Aes + Ve, Ais + Vi
-"""
-

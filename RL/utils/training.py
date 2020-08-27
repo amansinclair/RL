@@ -1,6 +1,8 @@
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm as bar
+from tqdm.notebook import tqdm as jbar
 
 
 class EnvManager:
@@ -40,17 +42,18 @@ def run_episode(env, agent, render=False):
     return episode_score
 
 
-def run(env, agent, n_episodes=200, render=False):
+def run(env, agent, n_episodes=200, render=False, jupyter=False):
     episode_scores = []
     print(f"####### Training Environment {env}, episodes {n_episodes} #######")
-    for episode in range(n_episodes):
+    pbar = jbar(range(n_episodes)) if jupyter else bar(range(n_episodes))
+    for episode in pbar:
         episode_score = run_episode(env, agent, render)
         episode_scores.append(episode_score)
-        print("Episode:", episode + 1, "Score:", episode_score)
+        pbar.set_description(f"Episode: {episode + 1}, Score: {episode_score}")
     return episode_scores
 
 
-def evaluate(env, agent_func, n_repeats=1, n_episodes=200, render=False):
+def evaluate(env, agent_func, n_repeats=1, n_episodes=200, render=False, jupyter=False):
     all_scores = []
     print(
         f"####### Eval Environment {env}, repeats {n_repeats}, episodes {n_episodes} #######"
