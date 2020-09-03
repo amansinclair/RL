@@ -10,6 +10,8 @@ class EnvManager:
         self.env = gym.make(env_name)
         self.env.seed(seed)
         self.env._max_episode_steps = max_steps
+        self.n_inputs = self.env.observation_space.shape[0]
+        self.n_outputs = self.env.action_space.n
         np.random.seed(seed)
 
     def __enter__(self):

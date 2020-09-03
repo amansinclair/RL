@@ -13,7 +13,8 @@ from .mcpg import (
     MCPPOAgent,
     MCPPOActor,
 )
-from .pg import Actor, Critic, Model, Rewarder
+from .pg import Actor, Critic, Model, Rewarder, EmptyRewarder
 from .dqn import DQN, DQNReplay
 from .sel import SelAgent
 from .cem import train
+from .returns import DiscountedReturn, GeneralAdvantageEstimation, LambaReturn

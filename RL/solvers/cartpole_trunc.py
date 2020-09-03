@@ -1,13 +1,13 @@
 import gym
 import matplotlib.pyplot as plt
-from RL.solvers import Actor, Critic, Model, Rewarder
+from RL.solvers import Actor, Critic, Model, Rewarder, EmptyRewarder
 from RL.utils import run, run_episode, EnvManager, get_env_size, plot_means, evaluate
 import numpy as np
 
 env_name = "MountainCar-v0"  # "LunarLander-v2"  # "MountainCar-v0"  # "CartPole-v1"
 n_inputs, n_outputs = get_env_size(env_name)
 
-
+"""
 def get_agent():
     actor = Actor(n_inputs, n_outputs, size=32)
     critic = Critic(n_inputs, size=32)
@@ -21,6 +21,24 @@ def get_agent():
         policy_lr=0.1,
         critic_lr=0.1,
         rewarder_lr=0.01,
+    )
+    return agent
+"""
+
+
+def get_agent():
+    actor = Actor(n_inputs, n_outputs, size=16)
+    critic = Critic(n_inputs, size=16)
+    rewarder = EmptyRewarder()  # Rewarder(n_inputs, n_outputs=1, size=16)
+    agent = Model(
+        actor,
+        critic,
+        rewarder,
+        rollout_length=20,
+        n_rollouts=1,
+        critic_lr=0.01,
+        rewarder_lr=0.01,
+        norm_obs=False,
     )
     return agent
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-from ..utils import Norm, StdNorm
+from ..utils import Norm, StdNorm, MeanNorm
 
 
 class RollOut:
@@ -92,6 +92,14 @@ class Rewarder(nn.Module):
         return reward
 
 
+class EmptyRewarder:
+    def __call__(self, obs):
+        return obs
+
+    def get_reward(self, obs):
+        return obs
+
+
 class Model:
     def __init__(
         self,
@@ -117,7 +125,7 @@ class Model:
         self.rewarder = rewarder
         self.actor_opt = optim.Adam(self.actor.parameters(), lr=policy_lr)
         self.critic_opt = optim.Adam(self.critic.parameters(), lr=critic_lr)
-        self.rewarder_opt = optim.Adam(self.rewarder.parameters(), lr=rewarder_lr)
+        # self.rewarder_opt = optim.Adam(self.rewarder.parameters(), lr=rewarder_lr)
         self.rollout_length = rollout_length
         self.n_rollouts = n_rollouts
         self.discount_rate_e = discount_rate_e
@@ -131,7 +139,7 @@ class Model:
             self.obs_normer = Norm()
         self.norm_ir = norm_ir
         if norm_ir:
-            self.ir_normer = StdNorm()
+            self.ir_normer = MeanNorm()
         self.reset()
 
     def reset(self):
@@ -157,7 +165,8 @@ class Model:
             self.current_rollout.intr_rewards.append(intr_reward)
         if len(self.current_rollout) == self.rollout_length or is_done:
             if self.norm_ir:
-                self.ir_normer.update(torch.tensor(self.current_rollout.intr_rewards))
+                self.ir_normer.update(torch.stack(self.current_rollout.intr_rewards))
+                # self.ir_normer.update(torch.tensor(self.current_rollout.intr_rewards))
             self.add_new_rollout()
             if len(self.rollouts) == self.n_rollouts:
                 self.update()
@@ -176,14 +185,14 @@ class Model:
             norm_obs = all_obs
         Aes, Te = self.get_advantages_targets()
         Ve = self.critic.get_values(all_obs)
-        Veloss = ((Ve - Te) ** 2).mean()
-        Viloss = self.rewarder(norm_obs).mean()
+        Veloss = ((Te - Ve) ** 2).mean()
+        # Viloss = self.rewarder(norm_obs).mean()
         self.critic_opt.zero_grad()
-        self.rewarder_opt.zero_grad()
+        # self.rewarder_opt.zero_grad()
         Veloss.backward()
-        Viloss.backward()
+        # Viloss.backward()
         self.critic_opt.step()
-        self.rewarder_opt.step()
+        # self.rewarder_opt.step()
         actions = self.stack_actions()
         old_probs = self.actor.get_probs(all_obs, actions).detach()
         for epoch in range(self.ppo_epochs):
@@ -211,7 +220,8 @@ class Model:
                 Ve_next = self.critic.get_values(torch.stack(rollout.next_obs))
                 mask = torch.tensor(rollout.is_not_dones, dtype=torch.float32)
                 Ve_next = Ve_next * mask
-                Re = torch.tensor(rollout.intr_rewards)
+                # Re = torch.tensor(rollout.intr_rewards)
+                Re = torch.stack(rollout.intr_rewards)
                 if self.norm_ir and self.ir_normer:
                     Re = self.ir_normer.normalize(Re)
                 # Re += torch.tensor(rollout.rewards)

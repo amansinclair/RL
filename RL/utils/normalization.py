@@ -39,3 +39,11 @@ class StdNorm(Norm):
     def normalize(self, x):
         return x / self.std
 
+
+class MeanNorm(Norm):
+    def normalize(self, x):
+        # .mean(dim=-1)
+        r1 = 1 - x[:, 0]
+        r2 = x[:, 1] ** 2
+        return r1 + r2
+
